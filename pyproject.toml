@@ -1,0 +1,25 @@
+[build-system]
+requires = ["uv_build>=0.8.19,<0.9.0"]
+build-backend = "uv_build"
+
+[project]
+name = "mjlab-kinova"
+version = "0.1.0"
+license = "Apache-2.0"
+description = "Reinforcement learning environments for the Kinova robot based on MjLab."
+readme = "README.md"
+requires-python = ">=3.12,<3.14"
+dependencies = [
+    "mjlab",
+    "onnxruntime",
+]
+
+[project.entry-points."mjlab.tasks"]
+mjlab_kinova = "mjlab_kinova.tasks"
+
+[tool.ruff]
+src = ["src"]  # Helpful for recognizing first-party imports.
+indent-width = 4
+
+[tool.uv.sources]
+mjlab = { path = "~/devel/mjlab/" }
