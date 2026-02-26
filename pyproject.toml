@@ -6,12 +6,15 @@ build-backend = "uv_build"
 name = "mjlab-kinova"
 version = "0.1.0"
 license = "Apache-2.0"
-description = "Reinforcement learning environments for the Kinova robot based on MjLab."
+description = "Reinforcement learning environments for the Kinova robot based on Mjlab."
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
 dependencies = [
     "mjlab",
     "onnxruntime",
+    "pybind11-stubgen>=2.5.5",
+    "pylint>=4.0.5",
+    "setuptools==81.0",
 ]
 
 [project.entry-points."mjlab.tasks"]
@@ -22,4 +25,13 @@ src = ["src"]  # Helpful for recognizing first-party imports.
 indent-width = 4
 
 [tool.uv.sources]
-mjlab = { path = "~/devel/mjlab/" }
+mjlab = { path = "../mjlab/" }
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+stubPath = "typings"
+
+[tool.pylint.main]
+extension-pkg-allow-list = ["mujoco"]
+generated-members = ["add_body"]
