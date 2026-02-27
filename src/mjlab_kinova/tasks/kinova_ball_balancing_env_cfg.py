@@ -21,7 +21,7 @@ from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 from . import ball_balancing_mdp as bb_mdp
 
 
-def get_ball_spec(radius: float = 0.0335, mass: float = 0.057) -> mujoco.MjSpec:
+def get_ball_spec(radius: float = 0.0335, mass: float = 0.0657) -> mujoco.MjSpec:
     """Create a simple free ball entity spec."""
     spec = mujoco.MjSpec()
     body = spec.worldbody.add_body(name="ball")
