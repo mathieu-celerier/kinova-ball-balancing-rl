@@ -135,7 +135,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         "is_alive": RewardTermCfg(func=mdp.is_alive, weight=0.2),
         "ball_centering": RewardTermCfg(
             func=bb_mdp.ball_centering_reward,
-            weight=24.0,
+            weight=30.0,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
@@ -204,7 +204,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
         "racquet_dist_from_initial_l2": RewardTermCfg(
             func=bb_mdp.racquet_dist_from_initial_l2,
-            weight=-10.0,
+            weight=-15.0,
             params={
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
             },
