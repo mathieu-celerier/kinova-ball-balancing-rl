@@ -185,7 +185,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         "joint_pos_limits": RewardTermCfg(
             func=mdp.joint_pos_limits,
             weight=-0.2,
-            params={"asset_cfg": SceneEntityCfg("robot", joint_names=("joint_.*",))},
+            params={"asset_cfg": SceneEntityCfg("robot", joint_names=("joint_[246]",))},
         ),
         "racquet_lin_vel_l2": RewardTermCfg(
             func=bb_mdp.racquet_lin_vel_l2,
