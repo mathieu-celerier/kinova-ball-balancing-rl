@@ -165,14 +165,6 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
                 "center_y": 0.0,
             },
         ),
-        "plate_too_low_penalty": RewardTermCfg(
-            func=bb_mdp.plate_too_low,
-            weight=-6.0,
-            params={
-                "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
-                "min_plate_height": 0.12,
-            },
-        ),
         "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.01),
         "action_acc_l2": RewardTermCfg(func=mdp.action_acc_l2, weight=-0.0015),
         "joint_vel_l2": RewardTermCfg(
