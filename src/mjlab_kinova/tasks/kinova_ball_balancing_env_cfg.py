@@ -146,7 +146,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
         "ball_speed": RewardTermCfg(
             func=bb_mdp.ball_speed_penalty,
-            weight=-0.08,
+            weight=-5.0,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
@@ -154,7 +154,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
         "ball_no_contact_penalty": RewardTermCfg(
             func=bb_mdp.ball_no_contact_proxy,
-            weight=-0.6,
+            weight=-10.0,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
