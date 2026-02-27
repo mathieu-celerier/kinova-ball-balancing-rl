@@ -265,7 +265,7 @@ def kinova_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
     """Create RL runner config for Kinova ball balancing."""
     return RslRlOnPolicyRunnerCfg(
         actor=RslRlModelCfg(
-            hidden_dims=(256, 128, 64),
+            hidden_dims=(64, 64),
             activation="elu",
             obs_normalization=False,
             stochastic=True,
@@ -273,7 +273,7 @@ def kinova_ppo_runner_cfg() -> RslRlOnPolicyRunnerCfg:
             noise_std_type="log",
         ),
         critic=RslRlModelCfg(
-            hidden_dims=(256, 128, 64),
+            hidden_dims=(64, 64),
             activation="elu",
             obs_normalization=False,
             stochastic=False,
