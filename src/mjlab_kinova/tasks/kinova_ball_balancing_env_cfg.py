@@ -92,6 +92,24 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
                 "ee_ft_wrench": ObservationTermCfg(
                     func=bb_mdp.ee_ft_wrench,
                 ),
+                "ball_pos_plate": ObservationTermCfg(
+                    func=bb_mdp.ball_pos_in_plate_frame,
+                    params={
+                        "ball_name": "ball",
+                        "plate_asset_cfg": SceneEntityCfg(
+                            "robot", body_names=("racquet_frame",)
+                        ),
+                    },
+                ),
+                "ball_vel_plate": ObservationTermCfg(
+                    func=bb_mdp.ball_lin_vel_in_plate_frame,
+                    params={
+                        "ball_name": "ball",
+                        "plate_asset_cfg": SceneEntityCfg(
+                            "robot", body_names=("racquet_frame",)
+                        ),
+                    },
+                ),
             },
             concatenate_terms=True,
             enable_corruption=False,
