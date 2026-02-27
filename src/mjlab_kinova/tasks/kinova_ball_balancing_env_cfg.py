@@ -189,14 +189,14 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
         "racquet_lin_vel_l2": RewardTermCfg(
             func=bb_mdp.racquet_lin_vel_l2,
-            weight=-0.2,
+            weight=-5.0,
             params={
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
             },
         ),
         "racquet_dist_from_initial_l2": RewardTermCfg(
             func=bb_mdp.racquet_dist_from_initial_l2,
-            weight=-15.0,
+            weight=-30.0,
             params={
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
             },
