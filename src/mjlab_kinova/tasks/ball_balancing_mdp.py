@@ -224,6 +224,24 @@ def racquet_dist_from_initial_l2(
     return torch.sum(torch.square(plate_pos_w - init_pos_w), dim=-1)
 
 
+def body_external_force(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the external force vector applied to a selected body in world frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    return asset.data.body_external_force[:, asset_cfg.body_ids].squeeze(1)
+
+
+def body_external_force_norm(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the norm of the external force applied to a selected body."""
+    force = body_external_force(env, asset_cfg)
+    return torch.linalg.norm(force, dim=-1)
+
+
 def reset_ball_on_plate(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,

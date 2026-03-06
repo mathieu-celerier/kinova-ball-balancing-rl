@@ -148,12 +148,27 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             },
         ),
     }
+    if not play:
+        events.update(
+            {
+                "ball_external_wrench": EventTermCfg(
+                    func=mdp.apply_external_force_torque,
+                    mode="interval",
+                    interval_range_s=(0.35, 0.9),
+                    params={
+                        "force_range": (-0.04, 0.04),
+                        "torque_range": (0.0, 0.0),
+                        "asset_cfg": SceneEntityCfg("ball", body_names=("ball",)),
+                    },
+                ),
+            }
+        )
 
     rewards = {
         "is_alive": RewardTermCfg(func=mdp.is_alive, weight=0.2),
         "ball_centering": RewardTermCfg(
             func=bb_mdp.ball_centering_reward,
-            weight=30.0,
+            weight=40.0,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
@@ -164,7 +179,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
         "ball_speed": RewardTermCfg(
             func=bb_mdp.ball_speed_penalty,
-            weight=-5.0,
+            weight=-8.0,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
@@ -172,7 +187,7 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
         ),
         "ball_no_contact_penalty": RewardTermCfg(
             func=bb_mdp.ball_no_contact_proxy,
-            weight=-10.0,
+            weight=-18.0,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
