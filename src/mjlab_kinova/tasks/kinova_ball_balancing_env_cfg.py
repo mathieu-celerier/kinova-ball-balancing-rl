@@ -31,7 +31,8 @@ def get_ball_spec(radius: float = 0.0335, mass: float = 0.0657) -> mujoco.MjSpec
         type=mujoco.mjtGeom.mjGEOM_SPHERE,
         size=(radius,),
         mass=mass,
-        friction=(1.0, 0.01, 0.0005),
+        friction=(1.0, 0.2, 0.0005),
+        condim=6,
         solref=(0.02, 2.5),
         solimp=(0.95, 0.995, 0.001, 0.5, 2.0),
         rgba=(0.9, 0.2, 0.2, 1.0),
@@ -151,14 +152,17 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
     if not play:
         events.update(
             {
-                "ball_external_wrench": EventTermCfg(
-                    func=mdp.apply_external_force_torque,
+                "ball_velocity_kick": EventTermCfg(
+                    func=bb_mdp.kick_ball_velocity,
                     mode="interval",
-                    interval_range_s=(0.35, 0.9),
+                    interval_range_s=(0.4, 1.0),
                     params={
-                        "force_range": (-0.04, 0.04),
-                        "torque_range": (0.0, 0.0),
-                        "asset_cfg": SceneEntityCfg("ball", body_names=("ball",)),
+                        "ball_name": "ball",
+                        "lin_vel_x_range": (-0.25, 0.25),
+                        "lin_vel_y_range": (-0.25, 0.25),
+                        "lin_vel_z_range": (-0.05, 0.05),
+                        "ang_vel_range": (0.0, 0.0),
+                        "add_to_current": True,
                     },
                 ),
             }
@@ -183,19 +187,17 @@ def kinova_ball_balancing_env_cfg(play: bool = False) -> ManagerBasedRlEnvCfg:
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
+                "lin_weight": 1.0,
+                "ang_weight": 1.0,
             },
         ),
         "ball_no_contact_penalty": RewardTermCfg(
-            func=bb_mdp.ball_no_contact_proxy,
+            func=bb_mdp.ball_no_contact_mujoco,
             weight=-18.0,
             params={
-                "ball_name": "ball",
-                "plate_asset_cfg": SceneEntityCfg("robot", body_names=("racquet_frame",)),
-                "contact_z": 0.04,
-                "z_tolerance": 0.01,
-                "max_xy_radius": 0.105,
-                "center_x": 0.0,
-                "center_y": 0.0,
+                "ball_geom_name": "ball/ball_geom",
+                "racquet_geom_name": "robot/plate_collision",
+                "max_contact_dist": 0.0,
             },
         ),
         "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.01),

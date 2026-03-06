@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+import mujoco
 import torch
 
 from mjlab.entity import Entity
@@ -44,6 +45,23 @@ def ball_lin_vel_in_plate_frame(
     plate_quat_w = robot.data.body_link_quat_w[:, plate_asset_cfg.body_ids].squeeze(1)
     ball_vel_w = ball.data.root_link_lin_vel_w
     return quat_apply_inverse(plate_quat_w, ball_vel_w)
+
+
+def ball_ang_vel_in_plate_frame(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Ball angular velocity in the plate body frame."""
+    robot: Entity = env.scene[plate_asset_cfg.name]
+    ball: Entity = env.scene[ball_name]
+
+    plate_quat_w = robot.data.body_link_quat_w[:, plate_asset_cfg.body_ids].squeeze(1)
+    if hasattr(ball.data, "root_link_ang_vel_w"):
+        ball_ang_vel_w = ball.data.root_link_ang_vel_w
+    else:
+        ball_ang_vel_w = ball.data.root_link_vel_w[:, 3:]
+    return quat_apply_inverse(plate_quat_w, ball_ang_vel_w)
 
 
 def joint_torques(
@@ -97,10 +115,15 @@ def ball_speed_penalty(
     env: "ManagerBasedRlEnv",
     ball_name: str,
     plate_asset_cfg: SceneEntityCfg,
+    lin_weight: float = 1.0,
+    ang_weight: float = 1.0,
 ) -> torch.Tensor:
-    """Penalty on ball speed in plate frame."""
-    ball_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
-    return torch.sum(torch.square(ball_vel_plate), dim=-1)
+    """Penalty on ball linear and angular speed in plate frame."""
+    ball_lin_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
+    ball_ang_vel_plate = ball_ang_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
+    lin_penalty = torch.sum(torch.square(ball_lin_vel_plate), dim=-1)
+    ang_penalty = torch.sum(torch.square(ball_ang_vel_plate), dim=-1)
+    return lin_weight * lin_penalty + ang_weight * ang_penalty
 
 
 def ball_fell_off(
@@ -143,27 +166,55 @@ def plate_too_low(
     return (plate_pos_w[:, 2] < min_plate_height).float()
 
 
-def ball_no_contact_proxy(
-    env: "ManagerBasedRlEnv",
-    ball_name: str,
-    plate_asset_cfg: SceneEntityCfg,
-    contact_z: float,
-    z_tolerance: float,
-    max_xy_radius: float,
-    center_x: float = 0.0,
-    center_y: float = 0.0,
-) -> torch.Tensor:
-    """Penalty proxy for missing plate contact using a plate-frame contact band.
+def _geom_id(env: "ManagerBasedRlEnv", geom_name: str) -> int:
+    if not hasattr(env, "_geom_id_cache"):
+        env._geom_id_cache = {}
+    geom_id_cache = env._geom_id_cache
 
-    Returns 1.0 when the ball center is outside the expected contact band.
+    geom_id = geom_id_cache.get(geom_name)
+    if geom_id is None:
+        geom_id = mujoco.mj_name2id(env.sim.mj_model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+        if geom_id < 0:
+            raise ValueError(f"Geom '{geom_name}' was not found in the model.")
+        geom_id_cache[geom_name] = int(geom_id)
+
+    return int(geom_id)
+
+
+def ball_no_contact_mujoco(
+    env: "ManagerBasedRlEnv",
+    ball_geom_name: str = "ball/ball_geom",
+    racquet_geom_name: str = "robot/plate_collision",
+    max_contact_dist: float = 0.0,
+) -> torch.Tensor:
+    """Penalty signal from MuJoCo contact list for a specific geom pair.
+
+    Returns 1.0 for envs where ball-racquet contact is absent, otherwise 0.0.
     """
-    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
-    dx = ball_pos_plate[:, 0] - center_x
-    dy = ball_pos_plate[:, 1] - center_y
-    radial = torch.sqrt(torch.square(dx) + torch.square(dy))
-    z_gap = torch.abs(ball_pos_plate[:, 2] - contact_z)
-    in_contact_band = torch.logical_and(radial <= max_xy_radius, z_gap <= z_tolerance)
-    return torch.logical_not(in_contact_band).float()
+    ball_geom_id = _geom_id(env, ball_geom_name)
+    racquet_geom_id = _geom_id(env, racquet_geom_name)
+
+    contact_geom = env.sim.data.contact.geom
+    contact_worldid = env.sim.data.contact.worldid
+    contact_dist = env.sim.data.contact.dist
+
+    pair_match = torch.logical_or(
+        torch.logical_and(contact_geom[:, 0] == ball_geom_id, contact_geom[:, 1] == racquet_geom_id),
+        torch.logical_and(contact_geom[:, 0] == racquet_geom_id, contact_geom[:, 1] == ball_geom_id),
+    )
+
+    active_pair = torch.logical_and(
+        pair_match,
+        torch.logical_and(
+            torch.logical_and(contact_worldid >= 0, contact_worldid < env.num_envs),
+            contact_dist <= max_contact_dist,
+        ),
+    )
+
+    no_contact = torch.ones(env.num_envs, device=env.device, dtype=torch.float32)
+    if torch.any(active_pair):
+        no_contact[contact_worldid[active_pair].long()] = 0.0
+    return no_contact
 
 
 def ball_no_contact_xy_proxy(
@@ -297,3 +348,55 @@ def reset_ball_on_plate(
 
     ball.write_root_link_pose_to_sim(pose, env_ids=env_ids)
     ball.write_root_link_velocity_to_sim(vel, env_ids=env_ids)
+
+
+def kick_ball_velocity(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    ball_name: str,
+    lin_vel_x_range: tuple[float, float] = (-0.2, 0.2),
+    lin_vel_y_range: tuple[float, float] = (-0.2, 0.2),
+    lin_vel_z_range: tuple[float, float] = (-0.05, 0.05),
+    ang_vel_range: tuple[float, float] = (-1.0, 1.0),
+    add_to_current: bool = True,
+) -> None:
+    """Apply random world-frame velocity kick to the free ball."""
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.int64)
+
+    ball: Entity = env.scene[ball_name]
+
+    if hasattr(ball.data, "root_link_lin_vel_w"):
+        lin_vel_w = ball.data.root_link_lin_vel_w[env_ids]
+    else:
+        lin_vel_w = ball.data.root_link_vel_w[env_ids, :3]
+
+    if hasattr(ball.data, "root_link_ang_vel_w"):
+        ang_vel_w = ball.data.root_link_ang_vel_w[env_ids]
+    elif hasattr(ball.data, "root_link_vel_w"):
+        ang_vel_w = ball.data.root_link_vel_w[env_ids, 3:]
+    else:
+        ang_vel_w = torch.zeros_like(lin_vel_w)
+
+    kick_lin = torch.stack(
+        (
+            sample_uniform(lin_vel_x_range[0], lin_vel_x_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(lin_vel_y_range[0], lin_vel_y_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(lin_vel_z_range[0], lin_vel_z_range[1], (len(env_ids),), device=env.device),
+        ),
+        dim=-1,
+    )
+
+    kick_ang = torch.stack(
+        (
+            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+        ),
+        dim=-1,
+    )
+
+    out_lin = lin_vel_w + kick_lin if add_to_current else kick_lin
+    out_ang = ang_vel_w + kick_ang if add_to_current else kick_ang
+    out_vel = torch.cat((out_lin, out_ang), dim=-1)
+    ball.write_root_link_velocity_to_sim(out_vel, env_ids=env_ids)
