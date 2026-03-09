@@ -29,6 +29,7 @@ from .policy_actions import InitialFramePositionActionCfg
 
 PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand"]
 
+
 def robot_joints_cfg() -> SceneEntityCfg:
     return SceneEntityCfg("robot", joint_names=("joint_.*",))
 
@@ -361,8 +362,8 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             func=mdp.randomize_pd_gains,
             mode="reset",
             params={
-                "kp_range": (0.8, 1.2),
-                "kd_range": (0.8, 1.2),
+                "kp_range": (0.95, 1.05),
+                "kd_range": (0.95, 1.05),
                 "asset_cfg": robot_actuators_cfg(),
                 "operation": "scale",
             },
