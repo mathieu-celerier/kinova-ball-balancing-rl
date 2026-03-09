@@ -475,8 +475,8 @@ def _terminations_cfg() -> dict[str, TerminationTermCfg]:
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "max_xy_radius": 0.11,
-                "min_height": -0.03,
+                "max_xy_radius": 0.16,
+                "min_height": -0.06,
                 "floor_height": 0.05,
             },
         ),
