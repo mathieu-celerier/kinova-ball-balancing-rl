@@ -557,3 +557,8 @@ def _randomize_body_mass_like_field(
         model_field[env_grid, body_grid] = samples
     else:
         raise ValueError(f"Unsupported operation '{operation}'.")
+
+
+randomize_body_mass.model_fields = ("body_mass",)
+randomize_body_inertia.model_fields = ("body_inertia",)
+randomize_robot_model.model_fields = ("body_mass", "body_inertia", "dof_armature")

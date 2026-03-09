@@ -338,7 +338,6 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
         "randomize_ball_mass": EventTermCfg(
             func=bb_mdp.randomize_body_mass,
             mode="reset",
-            domain_randomization=True,
             params={
                 "asset_cfg": BALL_BODY,
                 "mass_range": (0.7, 1.3),
@@ -348,7 +347,6 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
         "randomize_pd_gains": EventTermCfg(
             func=mdp.randomize_pd_gains,
             mode="reset",
-            domain_randomization=True,
             params={
                 "kp_range": (0.8, 1.2),
                 "kd_range": (0.8, 1.2),
@@ -362,7 +360,6 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
         events["randomize_robot_model"] = EventTermCfg(
             func=bb_mdp.randomize_robot_model,
             mode="reset",
-            domain_randomization=True,
             params={
                 "body_mass_range": (0.9, 1.1),
                 "body_inertia_range": (0.9, 1.1),
