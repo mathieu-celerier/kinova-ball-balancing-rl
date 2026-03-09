@@ -29,27 +29,40 @@ from .policy_actions import InitialFramePositionActionCfg
 
 PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand"]
 
-ROBOT_JOINTS = SceneEntityCfg("robot", joint_names=("joint_.*",))
-ROBOT_ACTUATORS = SceneEntityCfg("robot")
-RACQUET_FRAME = SceneEntityCfg("robot", body_names=("racquet_frame",))
-ROBOT_BODIES = SceneEntityCfg(
-    "robot",
-    body_names=(
-        "shoulder_link",
-        "half_arm_1_link",
-        "half_arm_2_link",
-        "forearm_link",
-        "spherical_wrist_1_link",
-        "spherical_wrist_2_link",
-        "bracelet_link",
-        "end_effector_link",
-        "FT_adapter",
-        "FT_sensor_mounting",
-        "FT_sensor_wrench",
-        "plate",
-    ),
-)
-BALL_BODY = SceneEntityCfg("ball", body_names=("ball",))
+def robot_joints_cfg() -> SceneEntityCfg:
+    return SceneEntityCfg("robot", joint_names=("joint_.*",))
+
+
+def robot_actuators_cfg() -> SceneEntityCfg:
+    return SceneEntityCfg("robot")
+
+
+def racquet_frame_cfg() -> SceneEntityCfg:
+    return SceneEntityCfg("robot", body_names=("racquet_frame",))
+
+
+def robot_bodies_cfg() -> SceneEntityCfg:
+    return SceneEntityCfg(
+        "robot",
+        body_names=(
+            "shoulder_link",
+            "half_arm_1_link",
+            "half_arm_2_link",
+            "forearm_link",
+            "spherical_wrist_1_link",
+            "spherical_wrist_2_link",
+            "bracelet_link",
+            "end_effector_link",
+            "FT_adapter",
+            "FT_sensor_mounting",
+            "FT_sensor_wrench",
+            "plate",
+        ),
+    )
+
+
+def ball_body_cfg() -> SceneEntityCfg:
+    return SceneEntityCfg("ball", body_names=("ball",))
 
 
 @dataclass(frozen=True)
@@ -230,14 +243,14 @@ def _critic_observation_terms() -> dict[str, ObservationTermCfg]:
                 func=bb_mdp.ball_pos_in_plate_frame,
                 params={
                     "ball_name": "ball",
-                    "plate_asset_cfg": RACQUET_FRAME,
+                    "plate_asset_cfg": racquet_frame_cfg(),
                 },
             ),
             "ball_vel_plate": ObservationTermCfg(
                 func=bb_mdp.ball_lin_vel_in_plate_frame,
                 params={
                     "ball_name": "ball",
-                    "plate_asset_cfg": RACQUET_FRAME,
+                    "plate_asset_cfg": racquet_frame_cfg(),
                 },
             ),
         }
@@ -254,22 +267,22 @@ def _shared_observation_terms(use_noise: bool) -> dict[str, ObservationTermCfg]:
     return {
         "joint_pos": ObservationTermCfg(
             func=mdp.joint_pos_rel,
-            params={"asset_cfg": ROBOT_JOINTS},
+            params={"asset_cfg": robot_joints_cfg()},
             noise=joint_pos_noise,
         ),
         "joint_vel": ObservationTermCfg(
             func=mdp.joint_vel_rel,
-            params={"asset_cfg": ROBOT_JOINTS},
+            params={"asset_cfg": robot_joints_cfg()},
             noise=joint_vel_noise,
         ),
         "ee_pos": ObservationTermCfg(
             func=bb_mdp.body_position_w,
-            params={"asset_cfg": RACQUET_FRAME},
+            params={"asset_cfg": racquet_frame_cfg()},
             noise=ee_pos_noise,
         ),
         "ee_vel": ObservationTermCfg(
             func=bb_mdp.body_linear_velocity_w,
-            params={"asset_cfg": RACQUET_FRAME},
+            params={"asset_cfg": racquet_frame_cfg()},
             noise=ee_vel_noise,
         ),
         "ee_ft_wrench": ObservationTermCfg(
@@ -316,7 +329,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             params={
                 "position_range": joint_reset_range,
                 "velocity_range": (0.0, 0.0),
-                "asset_cfg": ROBOT_JOINTS,
+                "asset_cfg": robot_joints_cfg(),
             },
         ),
         "reset_ball": EventTermCfg(
@@ -324,7 +337,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             mode="reset",
             params={
                 "ball_name": "ball",
-                "plate_asset_cfg": RACQUET_FRAME,
+                "plate_asset_cfg": racquet_frame_cfg(),
                 "xy_range": (-0.02, 0.02),
                 "z_offset": 0.05,
                 "x_offset": 0.0,
@@ -339,7 +352,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             func=bb_mdp.randomize_body_mass,
             mode="reset",
             params={
-                "asset_cfg": BALL_BODY,
+                "asset_cfg": ball_body_cfg(),
                 "mass_range": (0.7, 1.3),
                 "operation": "scale",
             },
@@ -350,7 +363,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             params={
                 "kp_range": (0.8, 1.2),
                 "kd_range": (0.8, 1.2),
-                "asset_cfg": ROBOT_ACTUATORS,
+                "asset_cfg": robot_actuators_cfg(),
                 "operation": "scale",
             },
         ),
@@ -364,7 +377,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
                 "body_mass_range": (0.9, 1.1),
                 "body_inertia_range": (0.9, 1.1),
                 "dof_armature_range": (0.9, 1.1),
-                "asset_cfg": ROBOT_BODIES,
+                "asset_cfg": robot_bodies_cfg(),
             },
         )
 
@@ -394,7 +407,7 @@ def _rewards_cfg() -> dict[str, RewardTermCfg]:
             weight=40.0,
             params={
                 "ball_name": "ball",
-                "plate_asset_cfg": RACQUET_FRAME,
+                "plate_asset_cfg": racquet_frame_cfg(),
                 "std": 0.06,
                 "center_x": 0.0,
                 "center_y": 0.0,
@@ -405,7 +418,7 @@ def _rewards_cfg() -> dict[str, RewardTermCfg]:
             weight=-8.0,
             params={
                 "ball_name": "ball",
-                "plate_asset_cfg": RACQUET_FRAME,
+                "plate_asset_cfg": racquet_frame_cfg(),
                 "lin_weight": 1.0,
                 "ang_weight": 1.0,
             },
@@ -424,12 +437,12 @@ def _rewards_cfg() -> dict[str, RewardTermCfg]:
         "joint_vel_l2": RewardTermCfg(
             func=mdp.joint_vel_l2,
             weight=-0.0005,
-            params={"asset_cfg": ROBOT_JOINTS},
+            params={"asset_cfg": robot_joints_cfg()},
         ),
         "joint_acc_l2": RewardTermCfg(
             func=mdp.joint_acc_l2,
             weight=-0.0001,
-            params={"asset_cfg": ROBOT_JOINTS},
+            params={"asset_cfg": robot_joints_cfg()},
         ),
         "joint_torque_l2": RewardTermCfg(
             func=bb_mdp.joint_torque_l2,
@@ -444,12 +457,12 @@ def _rewards_cfg() -> dict[str, RewardTermCfg]:
         "racquet_lin_vel_l2": RewardTermCfg(
             func=bb_mdp.racquet_lin_vel_l2,
             weight=-5.0,
-            params={"plate_asset_cfg": RACQUET_FRAME},
+            params={"plate_asset_cfg": racquet_frame_cfg()},
         ),
         "racquet_dist_from_initial_l2": RewardTermCfg(
             func=bb_mdp.racquet_dist_from_initial_l2,
             weight=-30.0,
-            params={"plate_asset_cfg": RACQUET_FRAME},
+            params={"plate_asset_cfg": racquet_frame_cfg()},
         ),
     }
 
@@ -461,7 +474,7 @@ def _terminations_cfg() -> dict[str, TerminationTermCfg]:
             func=bb_mdp.ball_fell_off,
             params={
                 "ball_name": "ball",
-                "plate_asset_cfg": RACQUET_FRAME,
+                "plate_asset_cfg": racquet_frame_cfg(),
                 "max_xy_radius": 0.11,
                 "min_height": -0.03,
                 "floor_height": 0.05,
