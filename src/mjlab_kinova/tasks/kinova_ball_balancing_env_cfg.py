@@ -358,7 +358,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             },
         ),
         "randomize_pd_gains": EventTermCfg(
-            func=mdp.randomize_pd_gains,
+            func=mdp.dr.pd_gains,
             mode="reset",
             params={
                 "kp_range": (0.8, 1.2),
