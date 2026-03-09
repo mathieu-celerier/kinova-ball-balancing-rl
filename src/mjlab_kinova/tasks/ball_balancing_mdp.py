@@ -194,9 +194,16 @@ def ball_no_contact_mujoco(
     ball_geom_id = _geom_id(env, ball_geom_name)
     racquet_geom_id = _geom_id(env, racquet_geom_name)
 
-    contact_geom = env.sim.data.contact.geom
-    contact_worldid = env.sim.data.contact.worldid
-    contact_dist = env.sim.data.contact.dist
+    ncon_raw = getattr(env.sim.data, "ncon", getattr(env.sim.data, "nacon", 0))
+    ncon = int(torch.as_tensor(ncon_raw).max().item())
+    no_contact = torch.ones(env.num_envs, device=env.device, dtype=torch.float32)
+    if ncon <= 0:
+        return no_contact
+
+    # MuJoCo only guarantees the first ncon slots in the contact buffer are valid.
+    contact_geom = env.sim.data.contact.geom[:ncon]
+    contact_worldid = env.sim.data.contact.worldid[:ncon]
+    contact_dist = env.sim.data.contact.dist[:ncon]
 
     pair_match = torch.logical_or(
         torch.logical_and(contact_geom[:, 0] == ball_geom_id, contact_geom[:, 1] == racquet_geom_id),
@@ -211,7 +218,6 @@ def ball_no_contact_mujoco(
         ),
     )
 
-    no_contact = torch.ones(env.num_envs, device=env.device, dtype=torch.float32)
     if torch.any(active_pair):
         no_contact[contact_worldid[active_pair].long()] = 0.0
     return no_contact
