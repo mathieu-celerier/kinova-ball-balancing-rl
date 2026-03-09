@@ -73,6 +73,26 @@ def joint_torques(
     return robot.data.actuator_force
 
 
+def body_position_w(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the selected body position in world frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    return asset.data.body_link_pos_w[:, asset_cfg.body_ids].squeeze(1)
+
+
+def body_linear_velocity_w(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the selected body linear velocity in world frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    if hasattr(asset.data, "body_link_lin_vel_w"):
+        return asset.data.body_link_lin_vel_w[:, asset_cfg.body_ids].squeeze(1)
+    return asset.data.body_link_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
+
+
 def ee_ft_wrench(
     env: "ManagerBasedRlEnv",
     force_sensor_name: str = "robot/EEForceSensor_fsensor",
@@ -310,6 +330,10 @@ def reset_ball_on_plate(
     y_offset: float = 0.0,
     racquet_x_radius: float | None = None,
     racquet_y_radius: float | None = None,
+    lin_vel_x_range: tuple[float, float] = (0.0, 0.0),
+    lin_vel_y_range: tuple[float, float] = (0.0, 0.0),
+    lin_vel_z_range: tuple[float, float] = (0.0, 0.0),
+    ang_vel_range: tuple[float, float] = (0.0, 0.0),
 ) -> None:
     """Reset ball above racquet using uniform elliptical sampling in plate frame."""
     if env_ids is None:
@@ -346,11 +370,26 @@ def reset_ball_on_plate(
             (env.num_envs, 3), device=env.device, dtype=plate_pos_w.dtype
         )
     env._racquet_init_pos_w[env_ids] = plate_pos_w
+    if not hasattr(env, "_racquet_init_quat_w"):
+        env._racquet_init_quat_w = torch.zeros(
+            (env.num_envs, 4), device=env.device, dtype=plate_quat_w.dtype
+        )
+    env._racquet_init_quat_w[env_ids] = plate_quat_w
 
     quat_w = torch.zeros((len(env_ids), 4), device=env.device)
     quat_w[:, 0] = 1.0
     pose = torch.cat((ball_pos_w, quat_w), dim=-1)
-    vel = torch.zeros((len(env_ids), 6), device=env.device)
+    vel = torch.stack(
+        (
+            sample_uniform(lin_vel_x_range[0], lin_vel_x_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(lin_vel_y_range[0], lin_vel_y_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(lin_vel_z_range[0], lin_vel_z_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+        ),
+        dim=-1,
+    )
 
     ball.write_root_link_pose_to_sim(pose, env_ids=env_ids)
     ball.write_root_link_velocity_to_sim(vel, env_ids=env_ids)
@@ -406,3 +445,115 @@ def kick_ball_velocity(
     out_ang = ang_vel_w + kick_ang if add_to_current else kick_ang
     out_vel = torch.cat((out_lin, out_ang), dim=-1)
     ball.write_root_link_velocity_to_sim(out_vel, env_ids=env_ids)
+
+
+def randomize_body_mass(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    mass_range: tuple[float, float],
+    operation: str = "scale",
+) -> None:
+    """Randomize body mass for the selected body set."""
+    _randomize_body_mass_like_field(
+        env=env,
+        env_ids=env_ids,
+        asset_cfg=asset_cfg,
+        field_name="body_mass",
+        value_range=mass_range,
+        operation=operation,
+    )
+
+
+def randomize_body_inertia(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    inertia_range: tuple[float, float],
+    operation: str = "scale",
+) -> None:
+    """Randomize body inertia for the selected body set."""
+    _randomize_body_mass_like_field(
+        env=env,
+        env_ids=env_ids,
+        asset_cfg=asset_cfg,
+        field_name="body_inertia",
+        value_range=inertia_range,
+        operation=operation,
+    )
+
+
+def randomize_robot_model(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    body_mass_range: tuple[float, float],
+    body_inertia_range: tuple[float, float],
+    dof_armature_range: tuple[float, float],
+    asset_cfg: SceneEntityCfg,
+) -> None:
+    """Randomize robot inertial parameters and armature."""
+    from mjlab.envs import mdp
+
+    randomize_body_mass(
+        env=env,
+        env_ids=env_ids,
+        asset_cfg=asset_cfg,
+        mass_range=body_mass_range,
+        operation="scale",
+    )
+    randomize_body_inertia(
+        env=env,
+        env_ids=env_ids,
+        asset_cfg=asset_cfg,
+        inertia_range=body_inertia_range,
+        operation="scale",
+    )
+    mdp.randomize_field(
+        env=env,
+        env_ids=env_ids,
+        field="dof_armature",
+        ranges=dof_armature_range,
+        operation="scale",
+        distribution="uniform",
+        asset_cfg=asset_cfg,
+    )
+
+
+def _randomize_body_mass_like_field(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    field_name: str,
+    value_range: tuple[float, float],
+    operation: str,
+) -> None:
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.int)
+    else:
+        env_ids = env_ids.to(env.device, dtype=torch.int)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    body_ids = asset.indexing.body_ids[asset_cfg.body_ids]
+    model_field = getattr(env.sim.model, field_name)
+    default_field = env.sim.get_default_field(field_name)
+
+    env_grid, body_grid = torch.meshgrid(env_ids, body_ids, indexing="ij")
+    base_values = default_field[body_ids]
+    if len(model_field.shape) == 3:
+        base_values = base_values.unsqueeze(0).expand(len(env_ids), -1, -1)
+    else:
+        base_values = base_values.unsqueeze(0).expand(len(env_ids), -1)
+
+    samples = sample_uniform(
+        value_range[0],
+        value_range[1],
+        base_values.shape,
+        device=env.device,
+    )
+
+    if operation == "scale":
+        model_field[env_grid, body_grid] = base_values * samples
+    elif operation == "abs":
+        model_field[env_grid, body_grid] = samples
+    else:
+        raise ValueError(f"Unsupported operation '{operation}'.")
