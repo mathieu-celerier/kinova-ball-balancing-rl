@@ -508,9 +508,10 @@ def randomize_robot_model(
         inertia_range=body_inertia_range,
         operation="scale",
     )
-    mdp.dr.dof_armature(
+    mdp.randomize_field(
         env=env,
         env_ids=env_ids,
+        field="dof_armature",
         ranges=dof_armature_range,
         operation="scale",
         distribution="uniform",
