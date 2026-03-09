@@ -30,7 +30,7 @@ from .policy_actions import InitialFramePositionActionCfg
 PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand"]
 
 ROBOT_JOINTS = SceneEntityCfg("robot", joint_names=("joint_.*",))
-ROBOT_ACTUATORS = SceneEntityCfg("robot", actuator_names=(".*",))
+ROBOT_ACTUATORS = SceneEntityCfg("robot")
 RACQUET_FRAME = SceneEntityCfg("robot", body_names=("racquet_frame",))
 ROBOT_BODIES = SceneEntityCfg(
     "robot",
