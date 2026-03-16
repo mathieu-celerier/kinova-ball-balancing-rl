@@ -38,6 +38,19 @@ Implements the custom Cartesian action term `InitialFramePositionAction`.
 
 Its main role is to reinterpret policy outputs as end-effector position offsets around the initial episode frame and pass those references through differential IK.
 
+## `src/mjlab_kinova/tasks/task_parameters.py`
+
+Centralizes the tunable task and PPO parameters.
+
+This is the best place to start if you want to change:
+
+- reward weights,
+- observation noise ranges,
+- action scales,
+- reset and disturbance ranges,
+- simulation timing,
+- PPO hyperparameters.
+
 ## `src/mjlab_kinova/robot/kinova_constants.py`
 
 Defines:

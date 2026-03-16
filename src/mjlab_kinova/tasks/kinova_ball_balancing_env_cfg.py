@@ -26,6 +26,7 @@ from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 
 from . import ball_balancing_mdp as bb_mdp
 from .policy_actions import InitialFramePositionActionCfg
+from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
 PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand"]
 
@@ -104,7 +105,15 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
 }
 
 
-def get_ball_spec(radius: float = 0.0335, mass: float = 0.0657) -> mujoco.MjSpec:
+def get_ball_spec(
+    radius: float = 0.0335,
+    mass: float = 0.0657,
+    friction: tuple[float, float, float] = (1.0, 0.2, 0.0005),
+    condim: int = 6,
+    solref: tuple[float, float] = (0.02, 2.5),
+    solimp: tuple[float, float, float, float, float] = (0.95, 0.995, 0.001, 0.5, 2.0),
+    rgba: tuple[float, float, float, float] = (0.9, 0.2, 0.2, 1.0),
+) -> mujoco.MjSpec:
     """Create a simple free ball entity spec."""
     spec = mujoco.MjSpec()
     body = spec.worldbody.add_body(name="ball")
@@ -114,30 +123,47 @@ def get_ball_spec(radius: float = 0.0335, mass: float = 0.0657) -> mujoco.MjSpec
         type=mujoco.mjtGeom.mjGEOM_SPHERE,
         size=(radius,),
         mass=mass,
-        friction=(1.0, 0.2, 0.0005),
-        condim=6,
-        solref=(0.02, 2.5),
-        solimp=(0.95, 0.995, 0.001, 0.5, 2.0),
-        rgba=(0.9, 0.2, 0.2, 1.0),
+        friction=friction,
+        condim=condim,
+        solref=solref,
+        solimp=solimp,
+        rgba=rgba,
     )
     return spec
+
+
+def _ball_entity_cfg(params: TaskParameters) -> EntityCfg:
+    ball = params.ball
+    return EntityCfg(
+        spec_fn=lambda: get_ball_spec(
+            radius=ball.radius,
+            mass=ball.mass,
+            friction=ball.friction,
+            condim=ball.condim,
+            solref=ball.solref,
+            solimp=ball.solimp,
+            rgba=ball.rgba,
+        )
+    )
 
 
 def kinova_ball_balancing_env_cfg(
     variant: PolicyVariant = "baseline",
     play: bool = False,
+    params: TaskParameters | None = None,
 ) -> ManagerBasedRlEnvCfg:
     """Create environment config for one of the RO-MAN 2026 policy variants."""
+    params = DEFAULT_TASK_PARAMETERS if params is None else params
     spec = POLICY_SPECS[variant]
 
     observations = {
         "actor": ObservationGroupCfg(
-            terms=_actor_observation_terms(spec, play),
+            terms=_actor_observation_terms(spec, play, params),
             concatenate_terms=True,
             enable_corruption=not play,
         ),
         "critic": ObservationGroupCfg(
-            terms=_critic_observation_terms(),
+            terms=_critic_observation_terms(params),
             concatenate_terms=True,
             enable_corruption=False,
         ),
@@ -148,40 +174,40 @@ def kinova_ball_balancing_env_cfg(
             terrain=TerrainImporterCfg(terrain_type="plane"),
             entities={
                 "robot": KINOVA_CFG,
-                "ball": EntityCfg(spec_fn=get_ball_spec),
+                "ball": _ball_entity_cfg(params),
             },
-            num_envs=1,
-            env_spacing=2.0,
+            num_envs=params.simulation.num_envs,
+            env_spacing=params.simulation.env_spacing,
         ),
         observations=observations,
-        actions=_actions_cfg(spec),
-        events=_events_cfg(spec, play),
-        rewards=_rewards_cfg(),
-        terminations=_terminations_cfg(),
+        actions=_actions_cfg(spec, params),
+        events=_events_cfg(spec, play, params),
+        rewards=_rewards_cfg(params),
+        terminations=_terminations_cfg(params),
         viewer=ViewerConfig(
             origin_type=ViewerConfig.OriginType.ASSET_BODY,
             entity_name="robot",
             body_name="plate",
-            distance=0.9,
-            elevation=-35.0,
-            azimuth=110.0,
+            distance=params.simulation.viewer_distance,
+            elevation=params.simulation.viewer_elevation,
+            azimuth=params.simulation.viewer_azimuth,
         ),
         sim=SimulationCfg(
-            nconmax=256,
-            njmax=1024,
+            nconmax=params.simulation.nconmax,
+            njmax=params.simulation.njmax,
             mujoco=MujocoCfg(
-                timestep=0.002,
-                iterations=30,
-                ls_iterations=30,
-                ccd_iterations=80,
+                timestep=params.simulation.timestep,
+                iterations=params.simulation.iterations,
+                ls_iterations=params.simulation.ls_iterations,
+                ccd_iterations=params.simulation.ccd_iterations,
             ),
         ),
-        decimation=5,
-        episode_length_s=10.0,
+        decimation=params.simulation.decimation,
+        episode_length_s=params.simulation.episode_length_s,
     )
 
     if play:
-        cfg.episode_length_s = int(1e9)
+        cfg.episode_length_s = params.simulation.play_episode_length_s
         cfg.observations["actor"].enable_corruption = False
 
     return cfg
@@ -189,55 +215,55 @@ def kinova_ball_balancing_env_cfg(
 
 def kinova_ppo_runner_cfg(
     variant: PolicyVariant = "baseline",
+    params: TaskParameters | None = None,
 ) -> RslRlOnPolicyRunnerCfg:
     """Create the PPO runner config for a given policy variant."""
+    params = DEFAULT_TASK_PARAMETERS if params is None else params
+    ppo = params.ppo
     return RslRlOnPolicyRunnerCfg(
         actor=RslRlModelCfg(
-            hidden_dims=(64, 64),
-            activation="elu",
+            hidden_dims=ppo.actor_hidden_dims,
+            activation=ppo.activation,
             obs_normalization=False,
             stochastic=True,
-            init_noise_std=1.0,
+            init_noise_std=ppo.init_noise_std,
             noise_std_type="log",
         ),
         critic=RslRlModelCfg(
-            hidden_dims=(64, 64),
-            activation="elu",
+            hidden_dims=ppo.critic_hidden_dims,
+            activation=ppo.activation,
             obs_normalization=False,
             stochastic=False,
-            init_noise_std=1.0,
+            init_noise_std=ppo.init_noise_std,
         ),
         algorithm=RslRlPpoAlgorithmCfg(
-            value_loss_coef=1.0,
+            value_loss_coef=ppo.value_loss_coef,
             use_clipped_value_loss=True,
-            clip_param=0.2,
-            entropy_coef=0.003,
-            num_learning_epochs=5,
-            num_mini_batches=4,
-            learning_rate=3.0e-4,
-            schedule="adaptive",
-            gamma=0.99,
-            lam=0.95,
-            desired_kl=0.01,
-            max_grad_norm=1.0,
+            clip_param=ppo.clip_param,
+            entropy_coef=ppo.entropy_coef,
+            num_learning_epochs=ppo.num_learning_epochs,
+            num_mini_batches=ppo.num_mini_batches,
+            learning_rate=ppo.learning_rate,
+            schedule=ppo.schedule,
+            gamma=ppo.gamma,
+            lam=ppo.lam,
+            desired_kl=ppo.desired_kl,
+            max_grad_norm=ppo.max_grad_norm,
         ),
         experiment_name=POLICY_SPECS[variant].experiment_name,
-        save_interval=200,
-        num_steps_per_env=24,
-        max_iterations=10_000,
+        save_interval=ppo.save_interval,
+        num_steps_per_env=ppo.num_steps_per_env,
+        max_iterations=ppo.max_iterations,
     )
 
 
-def _actor_observation_terms(
-    spec: PolicySpec,
-    play: bool,
-) -> dict[str, ObservationTermCfg]:
-    actor_terms = _shared_observation_terms(use_noise=not play)
+def _actor_observation_terms(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[str, ObservationTermCfg]:
+    actor_terms = _shared_observation_terms(use_noise=not play, params=params)
     return {name: actor_terms[name] for name in spec.actor_terms}
 
 
-def _critic_observation_terms() -> dict[str, ObservationTermCfg]:
-    terms = _shared_observation_terms(use_noise=False)
+def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTermCfg]:
+    terms = _shared_observation_terms(use_noise=False, params=params)
     terms.update(
         {
             "ball_pos_plate": ObservationTermCfg(
@@ -259,12 +285,19 @@ def _critic_observation_terms() -> dict[str, ObservationTermCfg]:
     return terms
 
 
-def _shared_observation_terms(use_noise: bool) -> dict[str, ObservationTermCfg]:
-    joint_pos_noise = Unoise(n_min=-0.01, n_max=0.01) if use_noise else None
-    joint_vel_noise = Unoise(n_min=-0.1, n_max=0.1) if use_noise else None
-    ee_pos_noise = Unoise(n_min=-0.003, n_max=0.003) if use_noise else None
-    ee_vel_noise = Unoise(n_min=-0.05, n_max=0.05) if use_noise else None
-    ft_noise = Unoise(n_min=-0.1, n_max=0.1) if use_noise else None
+def _noise_cfg(use_noise: bool, noise_range) -> Unoise | None:
+    if not use_noise:
+        return None
+    return Unoise(n_min=noise_range.min, n_max=noise_range.max)
+
+
+def _shared_observation_terms(use_noise: bool, params: TaskParameters) -> dict[str, ObservationTermCfg]:
+    noise = params.observation_noise
+    joint_pos_noise = _noise_cfg(use_noise, noise.joint_pos)
+    joint_vel_noise = _noise_cfg(use_noise, noise.joint_vel)
+    ee_pos_noise = _noise_cfg(use_noise, noise.ee_pos)
+    ee_vel_noise = _noise_cfg(use_noise, noise.ee_vel)
+    ft_noise = _noise_cfg(use_noise, noise.ee_ft_wrench)
     return {
         "joint_pos": ObservationTermCfg(
             func=mdp.joint_pos_rel,
@@ -293,36 +326,41 @@ def _shared_observation_terms(use_noise: bool) -> dict[str, ObservationTermCfg]:
     }
 
 
-def _actions_cfg(spec: PolicySpec) -> dict[str, ActionTermCfg]:
+def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTermCfg]:
     if spec.action_kind == "joint":
         return {
             "joint_pos": JointPositionActionCfg(
                 entity_name="robot",
                 actuator_names=(".*",),
-                scale=0.13,
-                use_default_offset=True,
+                scale=params.joint_action.scale,
+                use_default_offset=params.joint_action.use_default_offset,
             )
         }
 
+    action = params.cartesian_action
     return {
         "ee_pos": InitialFramePositionActionCfg(
             entity_name="robot",
             actuator_names=(".*",),
             frame_type="body",
             frame_name="racquet_frame",
-            delta_pos_scale=0.04,
-            damping=0.05,
-            max_dq=0.2,
-            position_weight=1.0,
-            orientation_weight=0.0,
-            posture_weight=0.03,
+            delta_pos_scale=action.delta_pos_scale,
+            damping=action.damping,
+            max_dq=action.max_dq,
+            position_weight=action.position_weight,
+            orientation_weight=action.orientation_weight,
+            posture_weight=action.posture_weight,
             posture_target=KINOVA_CFG.init_state.joint_pos,
         )
     }
 
 
-def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
-    joint_reset_range = (-0.35, 0.35) if spec.randomize_null_space_init else (0.0, 0.0)
+def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[str, EventTermCfg]:
+    randomization = params.randomization
+    ball_reset = params.ball_reset
+    joint_reset_range = (
+        randomization.null_space_joint_offset if spec.randomize_null_space_init else (0.0, 0.0)
+    )
     events = {
         "reset_robot_joints": EventTermCfg(
             func=mdp.reset_joints_by_offset,
@@ -339,14 +377,14 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "xy_range": (-0.02, 0.02),
-                "z_offset": 0.05,
-                "x_offset": 0.0,
-                "y_offset": 0.0,
-                "lin_vel_x_range": (-0.25, 0.25),
-                "lin_vel_y_range": (-0.25, 0.25),
-                "lin_vel_z_range": (-0.05, 0.05),
-                "ang_vel_range": (-2.0, 2.0),
+                "xy_range": ball_reset.xy_range,
+                "z_offset": ball_reset.z_offset,
+                "x_offset": ball_reset.x_offset,
+                "y_offset": ball_reset.y_offset,
+                "lin_vel_x_range": ball_reset.linear_velocity.x,
+                "lin_vel_y_range": ball_reset.linear_velocity.y,
+                "lin_vel_z_range": ball_reset.linear_velocity.z,
+                "ang_vel_range": ball_reset.angular_velocity,
             },
         ),
         "randomize_ball_mass": EventTermCfg(
@@ -354,7 +392,7 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             mode="reset",
             params={
                 "asset_cfg": ball_body_cfg(),
-                "mass_range": (0.7, 1.3),
+                "mass_range": randomization.ball_mass_scale,
                 "operation": "scale",
             },
         ),
@@ -362,8 +400,8 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             func=mdp.randomize_pd_gains,
             mode="reset",
             params={
-                "kp_range": (0.95, 1.05),
-                "kd_range": (0.95, 1.05),
+                "kp_range": randomization.pd_gain_scale,
+                "kd_range": randomization.pd_gain_scale,
                 "asset_cfg": robot_actuators_cfg(),
                 "operation": "scale",
             },
@@ -375,100 +413,103 @@ def _events_cfg(spec: PolicySpec, play: bool) -> dict[str, EventTermCfg]:
             func=bb_mdp.randomize_robot_model,
             mode="reset",
             params={
-                "body_mass_range": (0.9, 1.1),
-                "body_inertia_range": (0.9, 1.1),
-                "dof_armature_range": (0.9, 1.1),
+                "body_mass_range": randomization.robot_body_mass_scale,
+                "body_inertia_range": randomization.robot_body_inertia_scale,
+                "dof_armature_range": randomization.robot_dof_armature_scale,
                 "asset_cfg": robot_bodies_cfg(),
             },
         )
 
     if not play:
+        kick = params.ball_kick
         events["ball_velocity_kick"] = EventTermCfg(
             func=bb_mdp.kick_ball_velocity,
             mode="interval",
-            interval_range_s=(0.4, 1.0),
+            interval_range_s=kick.interval_s,
             params={
                 "ball_name": "ball",
-                "lin_vel_x_range": (-0.15, 0.15),
-                "lin_vel_y_range": (-0.15, 0.15),
-                "lin_vel_z_range": (-0.03, 0.03),
-                "ang_vel_range": (-0.5, 0.5),
-                "add_to_current": True,
+                "lin_vel_x_range": kick.linear_velocity.x,
+                "lin_vel_y_range": kick.linear_velocity.y,
+                "lin_vel_z_range": kick.linear_velocity.z,
+                "ang_vel_range": kick.angular_velocity,
+                "add_to_current": kick.add_to_current,
             },
         )
 
     return events
 
 
-def _rewards_cfg() -> dict[str, RewardTermCfg]:
+def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
+    rewards = params.rewards
     return {
-        "is_alive": RewardTermCfg(func=mdp.is_alive, weight=0.2),
+        "is_alive": RewardTermCfg(func=mdp.is_alive, weight=rewards.is_alive),
         "ball_centering": RewardTermCfg(
             func=bb_mdp.ball_centering_reward,
-            weight=40.0,
+            weight=rewards.ball_centering,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "std": 0.06,
+                "std": rewards.ball_centering_std,
                 "center_x": 0.0,
                 "center_y": 0.0,
             },
         ),
         "ball_speed": RewardTermCfg(
             func=bb_mdp.ball_speed_penalty,
-            weight=-8.0,
+            weight=rewards.ball_speed,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "lin_weight": 1.0,
-                "ang_weight": 1.0,
+                "lin_weight": rewards.ball_speed_lin_weight,
+                "ang_weight": rewards.ball_speed_ang_weight,
             },
         ),
         "ball_no_contact_penalty": RewardTermCfg(
             func=bb_mdp.ball_no_contact_mujoco,
-            weight=-18.0,
+            weight=rewards.ball_no_contact,
             params={
                 "ball_geom_name": "ball/ball_geom",
                 "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": 0.0,
+                "max_contact_dist": rewards.ball_no_contact_dist,
             },
         ),
-        "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=-0.01),
-        "action_acc_l2": RewardTermCfg(func=mdp.action_acc_l2, weight=-0.0015),
+        "action_rate_l2": RewardTermCfg(func=mdp.action_rate_l2, weight=rewards.action_rate_l2),
+        "action_acc_l2": RewardTermCfg(func=mdp.action_acc_l2, weight=rewards.action_acc_l2),
         "joint_vel_l2": RewardTermCfg(
             func=mdp.joint_vel_l2,
-            weight=-0.0005,
+            weight=rewards.joint_vel_l2,
             params={"asset_cfg": robot_joints_cfg()},
         ),
         "joint_acc_l2": RewardTermCfg(
             func=mdp.joint_acc_l2,
-            weight=-0.0001,
+            weight=rewards.joint_acc_l2,
             params={"asset_cfg": robot_joints_cfg()},
         ),
         "joint_torque_l2": RewardTermCfg(
             func=bb_mdp.joint_torque_l2,
-            weight=-0.0002,
+            weight=rewards.joint_torque_l2,
             params={"robot_name": "robot"},
         ),
         "joint_pos_limits": RewardTermCfg(
             func=mdp.joint_pos_limits,
-            weight=-0.2,
+            weight=rewards.joint_pos_limits,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=("joint_[246]",))},
         ),
         "racquet_lin_vel_l2": RewardTermCfg(
             func=bb_mdp.racquet_lin_vel_l2,
-            weight=-5.0,
+            weight=rewards.racquet_lin_vel_l2,
             params={"plate_asset_cfg": racquet_frame_cfg()},
         ),
         "racquet_dist_from_initial_l2": RewardTermCfg(
             func=bb_mdp.racquet_dist_from_initial_l2,
-            weight=-30.0,
+            weight=rewards.racquet_dist_from_initial_l2,
             params={"plate_asset_cfg": racquet_frame_cfg()},
         ),
     }
 
 
-def _terminations_cfg() -> dict[str, TerminationTermCfg]:
+def _terminations_cfg(params: TaskParameters) -> dict[str, TerminationTermCfg]:
+    terminations = params.terminations
     return {
         "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
         "ball_fell_off": TerminationTermCfg(
@@ -476,9 +517,9 @@ def _terminations_cfg() -> dict[str, TerminationTermCfg]:
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "max_xy_radius": 0.16,
-                "min_height": -0.06,
-                "floor_height": 0.05,
+                "max_xy_radius": terminations.max_xy_radius,
+                "min_height": terminations.min_height,
+                "floor_height": terminations.floor_height,
             },
         ),
     }

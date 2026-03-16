@@ -6,6 +6,8 @@ This repository provides reinforcement-learning environments for balancing a fre
 
 The project now includes a proper docs-site structure under [`docs/`](./docs) with MkDocs configuration in [`mkdocs.yml`](./mkdocs.yml).
 
+For task tuning, the main parameter entry point is [`src/mjlab_kinova/tasks/task_parameters.py`](./src/mjlab_kinova/tasks/task_parameters.py).
+
 Main pages:
 
 - [Home](./docs/index.md)
