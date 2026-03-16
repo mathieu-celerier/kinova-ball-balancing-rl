@@ -1,0 +1,25 @@
+site_name: MjLab Kinova Ball Balancing
+site_description: Documentation for the Kinova Gen3 ball-balancing environments built on MjLab and MuJoCo.
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - content.code.copy
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+nav:
+  - Home: index.md
+  - Getting Started: getting-started.md
+  - Environment:
+      - Task Overview: environment/overview.md
+      - MDP Design: environment/mdp.md
+      - Physics and Control: environment/physics.md
+      - Robot and MuJoCo Model: environment/robot-model.md
+  - Code Reference:
+      - Project Structure: code/structure.md
+      - Key Modules: code/modules.md

@@ -17,6 +17,12 @@ dependencies = [
     "setuptools==81.0",
 ]
 
+[dependency-groups]
+docs = [
+    "mkdocs>=1.6",
+    "mkdocs-material>=9.5",
+]
+
 [project.entry-points."mjlab.tasks"]
 mjlab_kinova = "mjlab_kinova.tasks"
 

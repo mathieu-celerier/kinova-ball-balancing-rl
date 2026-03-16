@@ -1,0 +1,138 @@
+# MDP Design
+
+The environment is assembled in `kinova_ball_balancing_env_cfg.py` and task-local terms live in `ball_balancing_mdp.py`.
+
+## Timing
+
+- MuJoCo simulation step: `0.002 s`
+- control decimation: `5`
+- effective policy step: `0.01 s`
+- episode length: `10 s`
+
+## Observations
+
+The task uses asymmetric actor-critic observations.
+
+### Actor Observations
+
+Baseline:
+
+- relative joint positions
+- relative joint velocities
+- end-effector position in world frame
+- end-effector linear velocity in world frame
+- end-effector F/T wrench
+
+Cartesian:
+
+- end-effector position in world frame
+- end-effector linear velocity in world frame
+- end-effector F/T wrench
+
+### Critic Observations
+
+The critic receives privileged ball state:
+
+- ball position in plate frame
+- ball linear velocity in plate frame
+
+This helps optimize the policy during simulation without forcing the deployed actor to depend on perfect ball-state access.
+
+## Observation Noise
+
+Training noise is injected into actor observations:
+
+- joint position: `[-0.01, 0.01]`
+- joint velocity: `[-0.1, 0.1]`
+- end-effector position: `[-0.003, 0.003]`
+- end-effector velocity: `[-0.05, 0.05]`
+- F/T wrench: `[-0.1, 0.1]`
+
+## Actions
+
+### Joint-Space Baseline
+
+The baseline uses `JointPositionActionCfg` over all joints with:
+
+- scale `0.13`
+- default offsets enabled
+
+### Cartesian Variant
+
+The Cartesian variant uses `InitialFramePositionAction`, which anchors commands to the initial end-effector frame pose of the episode.
+
+The implemented command law is:
+
+```text
+x_ref = x_0 + a * delta_pos_scale
+```
+
+with:
+
+- `x_0`: initial end-effector position
+- `a`: policy action
+- `delta_pos_scale = 0.04`
+
+The code also stores the initial orientation reference, but the IK orientation weight is `0.0`, so the task does not explicitly enforce an orientation target.
+
+## Reward Terms
+
+Positive terms:
+
+- `is_alive`: `+0.2`
+- `ball_centering`: `+40.0`
+
+Negative terms:
+
+- `ball_speed`: `-8.0`
+- `ball_no_contact_penalty`: `-18.0`
+- `action_rate_l2`: `-0.01`
+- `action_acc_l2`: `-0.0015`
+- `joint_vel_l2`: `-0.0005`
+- `joint_acc_l2`: `-0.0001`
+- `joint_torque_l2`: `-0.0002`
+- `joint_pos_limits`: `-0.2`
+- `racquet_lin_vel_l2`: `-5.0`
+- `racquet_dist_from_initial_l2`: `-30.0`
+
+### Key Reward Intuition
+
+`ball_centering` rewards small radial distance in the plate frame:
+
+```text
+r_center = exp(-(dx^2 + dy^2) / std^2)
+```
+
+`ball_speed` penalizes both translation and spin:
+
+```text
+penalty_speed = ||v_ball^plate||^2 + ||omega_ball^plate||^2
+```
+
+This makes the task care about damping, not only recentering.
+
+## Terminations
+
+Episodes terminate on:
+
+- timeout
+- ball falling off the plate support region
+
+The loss condition includes:
+
+- plate-frame radial distance above `0.16 m`
+- plate-frame height below `-0.06 m`
+- world height below `0.05 m`
+
+## Reset and Randomization
+
+Per-episode reset/randomization includes:
+
+- ball XY reset in `[-0.02, 0.02] m`
+- ball Z offset `0.05 m`
+- randomized initial ball linear and angular velocity
+- ball mass scaling in `[0.7, 1.3]`
+- PD gain scaling in `[0.95, 1.05]`
+- robot inertial randomization in `[0.9, 1.1]` for selected fields
+
+During training only, the ball also receives interval velocity kicks every `0.4-1.0 s`.

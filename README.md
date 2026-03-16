@@ -1,45 +1,49 @@
-# Mjlab Kinova Gen3 - Ball Balancing Task
+# MjLab Kinova Ball Balancing
+
+This repository provides reinforcement-learning environments for balancing a free ball on a plate mounted to a Kinova Gen3 end-effector in MuJoCo through MjLab.
+
+## Documentation
+
+The project now includes a proper docs-site structure under [`docs/`](./docs) with MkDocs configuration in [`mkdocs.yml`](./mkdocs.yml).
+
+Main pages:
+
+- [Home](./docs/index.md)
+- [Getting Started](./docs/getting-started.md)
+- [Task Overview](./docs/environment/overview.md)
+- [MDP Design](./docs/environment/mdp.md)
+- [Physics and Control](./docs/environment/physics.md)
+- [Robot and MuJoCo Model](./docs/environment/robot-model.md)
+- [Project Structure](./docs/code/structure.md)
 
 ## Install
 
-```
+```bash
 uv sync
 ```
 
-## Task
+## Train
 
-This package registers Kinova ball balancing tasks in MjLab:
-- `Mjlab-BallBalancing-Kinova` and `Mjlab-BallBalancing-Kinova-Baseline`
-- `Mjlab-BallBalancing-Kinova-Cartesian`
-- `Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand`
-- `Mjlab-BallBalancing-Kinova-Play` (baseline play alias)
-
-Task objective:
-- slow down and stabilize a free ball on the plate attached to the end-effector
-- use force/torque sensing with either joint-space or cartesian control
-- terminate when the ball falls off the plate
-
-Policy variants:
-- `Baseline`: joint-space policy with joint and end-effector observations, PD gain randomization, null-space reset randomization, and robot-model randomization.
-- `Cartesian`: task-space end-effector policy anchored to the per-episode initial racket pose and realized through differential IK to the existing joint PD actuators, with PD gain and robot-model randomization.
-- `BaselineNoRobotModelRand`: same as `Baseline` but disables robot-model randomization.
-
-## Training an agent
-
-```
+```bash
 uv run train Mjlab-BallBalancing-Kinova --env.scene.num-envs 512
 ```
 
-Examples:
+## Play
 
-```
-uv run train Mjlab-BallBalancing-Kinova-Baseline --env.scene.num-envs 512
-uv run train Mjlab-BallBalancing-Kinova-Cartesian --env.scene.num-envs 512
-uv run train Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand --env.scene.num-envs 512
-```
-
-## Playing the environment
-
-```
+```bash
 uv run play Mjlab-BallBalancing-Kinova --checkpoint-file logs/rsl_rl/kinova_ball_balancing/...
+```
+
+## Serve the Docs
+
+If MkDocs is installed in your environment:
+
+```bash
+mkdocs serve
+```
+
+or install the docs tooling with:
+
+```bash
+uv sync --group docs
 ```
