@@ -51,6 +51,8 @@ This is the best place to start if you want to change:
 - simulation timing,
 - PPO hyperparameters.
 
+The default values are also exposed as YAML in `config/task_parameters.yaml`.
+
 ## `src/mjlab_kinova/robot/kinova_constants.py`
 
 Defines:

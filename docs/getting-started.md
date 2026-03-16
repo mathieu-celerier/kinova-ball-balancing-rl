@@ -62,6 +62,16 @@ This serves the documentation as a normal project docs website instead of a sing
 
 Task and training parameters are centralized in `src/mjlab_kinova/tasks/task_parameters.py`.
 
+The default YAML file is:
+
+- `config/task_parameters.yaml`
+
+The registered tasks now load that YAML automatically at import time. To point the task registry to a different file, set:
+
+```bash
+export MJLAB_KINOVA_TASK_PARAMS=/path/to/task_parameters.yaml
+```
+
 That file is the easiest place to tune:
 
 - ball properties,
@@ -72,22 +82,16 @@ That file is the easiest place to tune:
 - simulation timing,
 - PPO hyperparameters.
 
-For programmatic overrides, create a modified parameter object and pass it into the builders:
+For programmatic overrides, load the YAML and pass the resulting object into the builders:
 
 ```python
-from dataclasses import replace
-
 from mjlab_kinova.tasks.kinova_ball_balancing_env_cfg import (
     kinova_ball_balancing_env_cfg,
     kinova_ppo_runner_cfg,
 )
-from mjlab_kinova.tasks.task_parameters import DEFAULT_TASK_PARAMETERS
+from mjlab_kinova.tasks.task_parameters import load_task_parameters
 
-params = replace(
-    DEFAULT_TASK_PARAMETERS,
-    rewards=replace(DEFAULT_TASK_PARAMETERS.rewards, ball_centering=60.0),
-    ppo=replace(DEFAULT_TASK_PARAMETERS.ppo, learning_rate=1e-4),
-)
+params = load_task_parameters("config/task_parameters.yaml")
 
 env_cfg = kinova_ball_balancing_env_cfg(variant="baseline", params=params)
 rl_cfg = kinova_ppo_runner_cfg(variant="baseline", params=params)

@@ -35,4 +35,5 @@ If you are new to the project, start here:
 2. [Task Overview](environment/overview.md)
 3. [MDP Design](environment/mdp.md)
 4. [Physics and Control](environment/physics.md)
-5. [Project Structure](code/structure.md)
+5. [Related Work](environment/related-work.md)
+6. [Project Structure](code/structure.md)

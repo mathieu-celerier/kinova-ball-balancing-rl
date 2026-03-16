@@ -6,7 +6,9 @@ This repository provides reinforcement-learning environments for balancing a fre
 
 The project now includes a proper docs-site structure under [`docs/`](./docs) with MkDocs configuration in [`mkdocs.yml`](./mkdocs.yml).
 
-For task tuning, the main parameter entry point is [`src/mjlab_kinova/tasks/task_parameters.py`](./src/mjlab_kinova/tasks/task_parameters.py).
+For task tuning, the main parameter entry points are [`config/task_parameters.yaml`](./config/task_parameters.yaml) and [`src/mjlab_kinova/tasks/task_parameters.py`](./src/mjlab_kinova/tasks/task_parameters.py).
+
+The task registry loads `config/task_parameters.yaml` automatically by default. You can override the path with `MJLAB_KINOVA_TASK_PARAMS`.
 
 Main pages:
 

@@ -19,6 +19,7 @@ nav:
       - Task Overview: environment/overview.md
       - MDP Design: environment/mdp.md
       - Physics and Control: environment/physics.md
+      - Related Work: environment/related-work.md
       - Robot and MuJoCo Model: environment/robot-model.md
   - Code Reference:
       - Project Structure: code/structure.md

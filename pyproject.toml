@@ -12,6 +12,7 @@ requires-python = ">=3.12,<3.14"
 dependencies = [
     "mjlab",
     "onnxruntime",
+    "pyyaml>=6.0",
     "pybind11-stubgen>=2.5.5",
     "pylint>=4.0.5",
     "setuptools==81.0",

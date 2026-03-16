@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+import os
+from dataclasses import asdict, dataclass, field, fields, is_dataclass
+from pathlib import Path
+from typing import Any, TypeVar, get_args, get_origin, get_type_hints
+
+import yaml
 
 
 @dataclass(frozen=True)
@@ -180,3 +185,71 @@ class TaskParameters:
 
 
 DEFAULT_TASK_PARAMETERS = TaskParameters()
+DEFAULT_TASK_PARAMETERS_PATH = Path(__file__).resolve().parents[3] / "config" / "task_parameters.yaml"
+TASK_PARAMETERS_ENV_VAR = "MJLAB_KINOVA_TASK_PARAMS"
+
+T = TypeVar("T")
+
+
+def _coerce_value(field_type: Any, value: Any, current_value: Any) -> Any:
+    origin = get_origin(field_type)
+
+    if is_dataclass(field_type):
+        if not isinstance(value, dict):
+            raise TypeError(f"Expected mapping for {field_type.__name__}, got {type(value).__name__}")
+        return _merge_dataclass(current_value, value)
+
+    if origin is tuple:
+        args = get_args(field_type)
+        if not isinstance(value, (list, tuple)):
+            raise TypeError(f"Expected sequence for tuple field, got {type(value).__name__}")
+        if len(args) == 2 and args[1] is ...:
+            return tuple(value)
+        return tuple(value)
+
+    return value
+
+
+def _merge_dataclass(instance: T, overrides: dict[str, Any]) -> T:
+    values = {}
+    valid_fields = {field_info.name: field_info for field_info in fields(instance)}
+    type_hints = get_type_hints(type(instance))
+
+    unknown_keys = set(overrides) - set(valid_fields)
+    if unknown_keys:
+        unknown = ", ".join(sorted(unknown_keys))
+        raise KeyError(f"Unknown configuration keys for {type(instance).__name__}: {unknown}")
+
+    for name, field_info in valid_fields.items():
+        current_value = getattr(instance, name)
+        if name in overrides:
+            values[name] = _coerce_value(
+                type_hints.get(name, field_info.type),
+                overrides[name],
+                current_value,
+            )
+        else:
+            values[name] = current_value
+
+    return type(instance)(**values)
+
+
+def task_parameters_to_dict(params: TaskParameters) -> dict[str, Any]:
+    return asdict(params)
+
+
+def load_task_parameters(path: str | Path = DEFAULT_TASK_PARAMETERS_PATH) -> TaskParameters:
+    config_path = Path(path)
+    with config_path.open("r", encoding="utf-8") as stream:
+        raw = yaml.safe_load(stream) or {}
+
+    if not isinstance(raw, dict):
+        raise TypeError(f"Top-level YAML object must be a mapping, got {type(raw).__name__}")
+
+    return _merge_dataclass(DEFAULT_TASK_PARAMETERS, raw)
+
+
+def load_default_task_parameters() -> TaskParameters:
+    """Load task parameters from the default YAML path or an environment override."""
+    config_path = os.environ.get(TASK_PARAMETERS_ENV_VAR, DEFAULT_TASK_PARAMETERS_PATH)
+    return load_task_parameters(config_path)
