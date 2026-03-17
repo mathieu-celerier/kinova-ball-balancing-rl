@@ -14,6 +14,12 @@ The local dependency is configured in the repository `pyproject.toml`.
 uv sync
 ```
 
+Optional zsh completion for project task IDs after `uv run train` / `uv run play`:
+
+```bash
+source scripts/zsh/mjlab-completion.zsh
+```
+
 ## Train
 
 ```bash
