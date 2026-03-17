@@ -12,6 +12,7 @@ from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
 from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
 from mjlab.utils.lab_api.math import sample_uniform
+from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
@@ -175,6 +176,29 @@ def ball_on_floor(
     return (ball.data.root_link_pos_w[:, 2] < floor_height).float()
 
 
+def ball_too_high(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+    max_height: float,
+) -> torch.Tensor:
+    """Terminate when the ball rises too high above the plate in plate frame."""
+    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
+    return ball_pos_plate[:, 2] > max_height
+
+
+def ball_height_above_plate_penalty(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+    soft_height: float,
+) -> torch.Tensor:
+    """Penalty on ball height above a soft plate-frame threshold."""
+    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
+    excess = torch.clamp(ball_pos_plate[:, 2] - soft_height, min=0.0)
+    return torch.square(excess)
+
+
 def plate_too_low(
     env: "ManagerBasedRlEnv",
     plate_asset_cfg: SceneEntityCfg,
@@ -289,16 +313,46 @@ def racquet_dist_from_initial_l2(
     env: "ManagerBasedRlEnv",
     plate_asset_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
-    """Penalty on racquet displacement from per-episode initial world position."""
+    """Penalty on racquet displacement from the nominal home-pose world position."""
     robot: Entity = env.scene[plate_asset_cfg.name]
     plate_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1)
 
-    if not hasattr(env, "_racquet_init_pos_w"):
-        env._racquet_init_pos_w = plate_pos_w.clone()
-        return torch.zeros(env.num_envs, device=env.device)
+    if not hasattr(env, "_racquet_nominal_pos_w"):
+        env._racquet_nominal_pos_w = _compute_nominal_racquet_pos_w(
+            env=env,
+            plate_asset_cfg=plate_asset_cfg,
+        )
 
-    init_pos_w = env._racquet_init_pos_w
-    return torch.sum(torch.square(plate_pos_w - init_pos_w), dim=-1)
+    nominal_pos_w = env._racquet_nominal_pos_w
+    return torch.sum(torch.square(plate_pos_w - nominal_pos_w), dim=-1)
+
+
+def _compute_nominal_racquet_pos_w(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Compute the racquet world position at the robot home joint configuration."""
+    robot: Entity = env.scene[plate_asset_cfg.name]
+
+    current_joint_pos = robot.data.joint_pos.clone()
+    current_joint_vel = robot.data.joint_vel.clone()
+
+    home_joint_map = KINOVA_CFG.init_state.joint_pos
+    home_joint_pos = torch.tensor(
+        [home_joint_map[name] for name in robot.joint_names],
+        device=env.device,
+        dtype=current_joint_pos.dtype,
+    ).unsqueeze(0).expand(env.num_envs, -1)
+    zero_joint_vel = torch.zeros_like(current_joint_vel)
+
+    robot.write_joint_state_to_sim(home_joint_pos, zero_joint_vel)
+    env.sim.forward()
+    nominal_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+
+    robot.write_joint_state_to_sim(current_joint_pos, current_joint_vel)
+    env.sim.forward()
+
+    return nominal_pos_w
 
 
 def body_external_force(
@@ -364,17 +418,6 @@ def reset_ball_on_plate(
     offset_plate = torch.stack((x, y, z), dim=-1)
     offset_w = quat_apply(plate_quat_w, offset_plate)
     ball_pos_w = plate_pos_w + offset_w
-
-    if not hasattr(env, "_racquet_init_pos_w"):
-        env._racquet_init_pos_w = torch.zeros(
-            (env.num_envs, 3), device=env.device, dtype=plate_pos_w.dtype
-        )
-    env._racquet_init_pos_w[env_ids] = plate_pos_w
-    if not hasattr(env, "_racquet_init_quat_w"):
-        env._racquet_init_quat_w = torch.zeros(
-            (env.num_envs, 4), device=env.device, dtype=plate_quat_w.dtype
-        )
-    env._racquet_init_quat_w[env_ids] = plate_quat_w
 
     quat_w = torch.zeros((len(env_ids), 4), device=env.device)
     quat_w[:, 0] = 1.0

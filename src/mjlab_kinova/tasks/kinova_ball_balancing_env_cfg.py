@@ -420,7 +420,7 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
             },
         )
 
-    if not play:
+    if spec.use_ball_kick and not play:
         kick = params.ball_kick
         events["ball_velocity_kick"] = EventTermCfg(
             func=bb_mdp.kick_ball_velocity,
@@ -462,6 +462,15 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "plate_asset_cfg": racquet_frame_cfg(),
                 "lin_weight": rewards.ball_speed_lin_weight,
                 "ang_weight": rewards.ball_speed_ang_weight,
+            },
+        ),
+        "ball_height_above_plate": RewardTermCfg(
+            func=bb_mdp.ball_height_above_plate_penalty,
+            weight=rewards.ball_height_above_plate,
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "soft_height": rewards.ball_height_soft_threshold,
             },
         ),
         "ball_no_contact_penalty": RewardTermCfg(
@@ -520,6 +529,14 @@ def _terminations_cfg(params: TaskParameters) -> dict[str, TerminationTermCfg]:
                 "max_xy_radius": terminations.max_xy_radius,
                 "min_height": terminations.min_height,
                 "floor_height": terminations.floor_height,
+            },
+        ),
+        "ball_too_high": TerminationTermCfg(
+            func=bb_mdp.ball_too_high,
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "max_height": terminations.max_height,
             },
         ),
     }

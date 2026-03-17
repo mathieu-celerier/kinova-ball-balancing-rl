@@ -110,6 +110,8 @@ class RewardParameters:
     ball_speed: float = -8.0
     ball_speed_lin_weight: float = 1.0
     ball_speed_ang_weight: float = 1.0
+    ball_height_above_plate: float = -50.0
+    ball_height_soft_threshold: float = 0.06
     ball_no_contact: float = -18.0
     ball_no_contact_dist: float = 0.0
     action_rate_l2: float = -0.01
@@ -126,6 +128,7 @@ class RewardParameters:
 class TerminationParameters:
     max_xy_radius: float = 0.16
     min_height: float = -0.06
+    max_height: float = 0.12
     floor_height: float = 0.05
 
 
