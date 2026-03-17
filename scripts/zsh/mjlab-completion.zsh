@@ -7,9 +7,14 @@ autoload -Uz compinit
 if [[ -z ${functions[compdef]+x} ]]; then
   compinit -i >/dev/null 2>&1
 fi
+autoload -Uz _files
 
 typeset -g _MJLAB_COMPLETION_SCRIPT_DIR=${${(%):-%N}:A:h}
 typeset -ga _MJLAB_TASK_IDS_CACHE
+
+if [[ -z ${functions[_uv]+x} ]] && command -v uv >/dev/null 2>&1; then
+  eval "$(uv generate-shell-completion zsh 2>/dev/null)"
+fi
 
 if [[ -n ${functions[_uv]+x} && -z ${functions[_mjlab_uv_original]+x} ]]; then
   functions[_mjlab_uv_original]=$functions[_uv]
@@ -51,8 +56,13 @@ _mjlab_complete_uv_task() {
 }
 
 _mjlab_uv_completion() {
-  if (( CURRENT == 4 )) && [[ ${words[2]} == run ]] && [[ ${words[3]} == (train|play) ]]; then
-    _mjlab_complete_uv_task && return 0
+  if [[ ${words[2]} == run ]] && [[ ${words[3]} == (train|play) ]]; then
+    if (( CURRENT == 4 )); then
+      _mjlab_complete_uv_task && return 0
+    fi
+    if [[ ${words[CURRENT-1]} == --checkpoint-file ]]; then
+      _files && return 0
+    fi
   fi
 
   if [[ -n ${functions[_mjlab_uv_original]+x} ]]; then
