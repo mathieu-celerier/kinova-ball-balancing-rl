@@ -19,7 +19,7 @@ from mjlab.managers.termination_manager import TerminationTermCfg
 from mjlab.rl import RslRlModelCfg, RslRlOnPolicyRunnerCfg, RslRlPpoAlgorithmCfg
 from mjlab.scene import SceneCfg
 from mjlab.sim import MujocoCfg, SimulationCfg
-from mjlab.terrains import TerrainImporterCfg
+from mjlab.terrains import TerrainEntityCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
 from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
@@ -204,7 +204,7 @@ def kinova_ball_balancing_env_cfg(
 
     cfg = ManagerBasedRlEnvCfg(
         scene=SceneCfg(
-            terrain=TerrainImporterCfg(terrain_type="plane"),
+            terrain=TerrainEntityCfg(terrain_type="plane"),
             entities={
                 "robot": KINOVA_CFG,
                 "ball": _ball_entity_cfg(params),
@@ -258,16 +258,16 @@ def kinova_ppo_runner_cfg(
             hidden_dims=ppo.actor_hidden_dims,
             activation=ppo.activation,
             obs_normalization=False,
-            stochastic=True,
-            init_noise_std=ppo.init_noise_std,
-            noise_std_type="log",
+            distribution_cfg={
+                "class_name": "GaussianDistribution",
+                "init_std": ppo.init_noise_std,
+                "std_type": "log",
+            },
         ),
         critic=RslRlModelCfg(
             hidden_dims=ppo.critic_hidden_dims,
             activation=ppo.activation,
             obs_normalization=False,
-            stochastic=False,
-            init_noise_std=ppo.init_noise_std,
         ),
         algorithm=RslRlPpoAlgorithmCfg(
             value_loss_coef=ppo.value_loss_coef,
@@ -441,7 +441,7 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
 
     if spec.randomize_pd_gains:
         events["randomize_pd_gains"] = EventTermCfg(
-            func=mdp.randomize_pd_gains,
+            func=bb_mdp.randomize_pd_gains,
             mode="reset",
             params={
                 "kp_range": randomization.pd_gain_scale,

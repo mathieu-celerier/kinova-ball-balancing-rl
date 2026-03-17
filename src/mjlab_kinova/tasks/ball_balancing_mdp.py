@@ -630,8 +630,6 @@ def randomize_robot_model(
     asset_cfg: SceneEntityCfg,
 ) -> None:
     """Randomize robot inertial parameters and armature."""
-    from mjlab.envs import mdp
-
     randomize_body_mass(
         env=env,
         env_ids=env_ids,
@@ -646,15 +644,67 @@ def randomize_robot_model(
         inertia_range=body_inertia_range,
         operation="scale",
     )
-    mdp.randomize_field(
+    _randomize_dof_armature(
         env=env,
         env_ids=env_ids,
-        field="dof_armature",
-        ranges=dof_armature_range,
-        operation="scale",
-        distribution="uniform",
         asset_cfg=asset_cfg,
+        value_range=dof_armature_range,
+        operation="scale",
     )
+
+
+def randomize_pd_gains(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    kp_range: tuple[float, float],
+    kd_range: tuple[float, float],
+    asset_cfg: SceneEntityCfg,
+    operation: str = "scale",
+) -> None:
+    """Randomize position-actuator PD gains for selected actuators."""
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.int)
+    else:
+        env_ids = env_ids.to(env.device, dtype=torch.int)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    actuator_ids = asset.indexing.ctrl_ids
+
+    gainprm = env.sim.model.actuator_gainprm
+    biasprm = env.sim.model.actuator_biasprm
+    default_gainprm = env.sim.get_default_field("actuator_gainprm")
+    default_biasprm = env.sim.get_default_field("actuator_biasprm")
+
+    env_grid, act_grid = torch.meshgrid(env_ids, actuator_ids, indexing="ij")
+
+    base_kp = default_gainprm[actuator_ids, 0].unsqueeze(0).expand(len(env_ids), -1)
+    base_kd = (-default_biasprm[actuator_ids, 2]).unsqueeze(0).expand(len(env_ids), -1)
+
+    kp_samples = sample_uniform(
+        kp_range[0],
+        kp_range[1],
+        base_kp.shape,
+        device=env.device,
+    )
+    kd_samples = sample_uniform(
+        kd_range[0],
+        kd_range[1],
+        base_kd.shape,
+        device=env.device,
+    )
+
+    if operation == "scale":
+        out_kp = base_kp * kp_samples
+        out_kd = base_kd * kd_samples
+    elif operation == "abs":
+        out_kp = kp_samples
+        out_kd = kd_samples
+    else:
+        raise ValueError(f"Unsupported operation '{operation}'.")
+
+    gainprm[env_grid, act_grid, 0] = out_kp
+    biasprm[env_grid, act_grid, 1] = -out_kp
+    biasprm[env_grid, act_grid, 2] = -out_kd
 
 
 def _randomize_body_mass_like_field(
@@ -697,6 +747,42 @@ def _randomize_body_mass_like_field(
         raise ValueError(f"Unsupported operation '{operation}'.")
 
 
+def _randomize_dof_armature(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    value_range: tuple[float, float],
+    operation: str,
+) -> None:
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.int)
+    else:
+        env_ids = env_ids.to(env.device, dtype=torch.int)
+
+    asset: Entity = env.scene[asset_cfg.name]
+    dof_ids = asset.indexing.joint_v_adr
+    model_field = env.sim.model.dof_armature
+    default_field = env.sim.get_default_field("dof_armature")
+
+    env_grid, dof_grid = torch.meshgrid(env_ids, dof_ids, indexing="ij")
+    base_values = default_field[dof_ids].unsqueeze(0).expand(len(env_ids), -1)
+
+    samples = sample_uniform(
+        value_range[0],
+        value_range[1],
+        base_values.shape,
+        device=env.device,
+    )
+
+    if operation == "scale":
+        model_field[env_grid, dof_grid] = base_values * samples
+    elif operation == "abs":
+        model_field[env_grid, dof_grid] = samples
+    else:
+        raise ValueError(f"Unsupported operation '{operation}'.")
+
+
 randomize_body_mass.model_fields = ("body_mass",)
 randomize_body_inertia.model_fields = ("body_inertia",)
 randomize_robot_model.model_fields = ("body_mass", "body_inertia", "dof_armature")
+randomize_pd_gains.model_fields = ("actuator_gainprm", "actuator_biasprm")
