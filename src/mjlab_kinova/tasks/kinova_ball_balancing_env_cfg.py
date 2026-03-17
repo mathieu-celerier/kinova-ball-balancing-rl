@@ -547,6 +547,16 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
             weight=rewards.joint_pos_limits,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=("joint_[246]",))},
         ),
+        "plate_drop_under_ball": RewardTermCfg(
+            func=bb_mdp.plate_drop_under_ball_penalty,
+            weight=rewards.plate_drop_under_ball,
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "ball_height_threshold": rewards.plate_drop_ball_height_threshold,
+                "xy_radius": rewards.plate_drop_xy_radius,
+            },
+        ),
         "racquet_lin_vel_l2": RewardTermCfg(
             func=bb_mdp.racquet_lin_vel_l2,
             weight=rewards.racquet_lin_vel_l2,

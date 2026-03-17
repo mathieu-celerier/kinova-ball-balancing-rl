@@ -120,6 +120,9 @@ class RewardParameters:
     joint_acc_l2: float = -0.0001
     joint_torque_l2: float = -0.0002
     joint_pos_limits: float = -0.2
+    plate_drop_under_ball: float = -2.0
+    plate_drop_ball_height_threshold: float = 0.01
+    plate_drop_xy_radius: float = 0.12
     racquet_lin_vel_l2: float = -5.0
     racquet_dist_from_initial_l2: float = -30.0
 

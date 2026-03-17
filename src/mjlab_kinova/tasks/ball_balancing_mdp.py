@@ -94,6 +94,17 @@ def body_linear_velocity_w(
     return asset.data.body_link_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
 
 
+def body_linear_velocity_in_body_frame(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the selected body linear velocity expressed in its own body frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    body_quat_w = asset.data.body_link_quat_w[:, asset_cfg.body_ids].squeeze(1)
+    body_vel_w = body_linear_velocity_w(env, asset_cfg)
+    return quat_apply_inverse(body_quat_w, body_vel_w)
+
+
 def ee_ft_wrench(
     env: "ManagerBasedRlEnv",
     force_sensor_name: str = "robot/EEForceSensor_fsensor",
@@ -197,6 +208,30 @@ def ball_height_above_plate_penalty(
     ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
     excess = torch.clamp(ball_pos_plate[:, 2] - soft_height, min=0.0)
     return torch.square(excess)
+
+
+def plate_drop_under_ball_penalty(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+    ball_height_threshold: float,
+    xy_radius: float,
+) -> torch.Tensor:
+    """Penalty on moving the plate down along its normal while the ball is still above it."""
+    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
+    plate_vel_plate = body_linear_velocity_in_body_frame(env, plate_asset_cfg)
+
+    radial_xy = torch.linalg.norm(ball_pos_plate[:, :2], dim=-1)
+    ball_near_racquet = torch.logical_and(
+        ball_pos_plate[:, 2] > ball_height_threshold,
+        radial_xy < xy_radius,
+    )
+    downward_plate_speed = torch.clamp(-plate_vel_plate[:, 2], min=0.0)
+    return torch.where(
+        ball_near_racquet,
+        torch.square(downward_plate_speed),
+        torch.zeros_like(downward_plate_speed),
+    )
 
 
 def plate_too_low(
