@@ -284,6 +284,7 @@ def kinova_ppo_runner_cfg(
             max_grad_norm=ppo.max_grad_norm,
         ),
         experiment_name=POLICY_SPECS[variant].experiment_name,
+        logger="tensorboard",
         save_interval=ppo.save_interval,
         num_steps_per_env=ppo.num_steps_per_env,
         max_iterations=ppo.max_iterations,
