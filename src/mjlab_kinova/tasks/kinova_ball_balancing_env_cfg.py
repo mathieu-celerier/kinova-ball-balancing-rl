@@ -487,11 +487,14 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
     return {
         "is_alive": RewardTermCfg(func=mdp.is_alive, weight=rewards.is_alive),
         "ball_centering": RewardTermCfg(
-            func=bb_mdp.ball_centering_reward,
+            func=bb_mdp.ball_centering_contact_reward,
             weight=rewards.ball_centering,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
+                "ball_geom_name": "ball/ball_geom",
+                "racquet_geom_name": "robot/plate_collision",
+                "max_contact_dist": rewards.ball_no_contact_dist,
                 "std": rewards.ball_centering_std,
                 "center_x": 0.0,
                 "center_y": 0.0,
@@ -582,14 +585,6 @@ def _terminations_cfg(params: TaskParameters) -> dict[str, TerminationTermCfg]:
                 "max_xy_radius": terminations.max_xy_radius,
                 "min_height": terminations.min_height,
                 "floor_height": terminations.floor_height,
-            },
-        ),
-        "ball_too_high": TerminationTermCfg(
-            func=bb_mdp.ball_too_high,
-            params={
-                "ball_name": "ball",
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "max_height": terminations.max_height,
             },
         ),
     }

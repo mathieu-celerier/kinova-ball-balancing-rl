@@ -80,7 +80,6 @@ rewards:
 terminations:
   max_xy_radius: 0.16
   min_height: -0.06
-  max_height: 0.12
   floor_height: 0.05
 
 simulation:

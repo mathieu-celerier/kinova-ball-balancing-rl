@@ -131,7 +131,6 @@ class RewardParameters:
 class TerminationParameters:
     max_xy_radius: float = 0.16
     min_height: float = -0.06
-    max_height: float = 0.12
     floor_height: float = 0.05
 
 

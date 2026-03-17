@@ -143,6 +143,35 @@ def ball_centering_reward(
     return torch.exp(-radial_sq / (std**2))
 
 
+def ball_centering_contact_reward(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+    ball_geom_name: str,
+    racquet_geom_name: str,
+    max_contact_dist: float,
+    std: float,
+    center_x: float = 0.0,
+    center_y: float = 0.0,
+) -> torch.Tensor:
+    """Reward centering only while ball-racquet contact is active."""
+    centering = ball_centering_reward(
+        env=env,
+        ball_name=ball_name,
+        plate_asset_cfg=plate_asset_cfg,
+        std=std,
+        center_x=center_x,
+        center_y=center_y,
+    )
+    no_contact = ball_no_contact_mujoco(
+        env=env,
+        ball_geom_name=ball_geom_name,
+        racquet_geom_name=racquet_geom_name,
+        max_contact_dist=max_contact_dist,
+    )
+    return centering * (1.0 - no_contact)
+
+
 def ball_speed_penalty(
     env: "ManagerBasedRlEnv",
     ball_name: str,
@@ -192,10 +221,20 @@ def ball_too_high(
     ball_name: str,
     plate_asset_cfg: SceneEntityCfg,
     max_height: float,
+    min_world_z_vel: float,
 ) -> torch.Tensor:
-    """Terminate when the ball rises too high above the plate in plate frame."""
+    """Terminate on upward ball escape rather than plate drop-away."""
     ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
-    return ball_pos_plate[:, 2] > max_height
+    ball: Entity = env.scene[ball_name]
+    ball_lin_vel_w = (
+        ball.data.root_link_lin_vel_w
+        if hasattr(ball.data, "root_link_lin_vel_w")
+        else ball.data.root_link_vel_w[:, :3]
+    )
+    return torch.logical_and(
+        ball_pos_plate[:, 2] > max_height,
+        ball_lin_vel_w[:, 2] > min_world_z_vel,
+    )
 
 
 def ball_height_above_plate_penalty(
