@@ -1,0 +1,12 @@
+# Same task family, but with a more conservative PPO setup for optimization stability.
+ppo:
+  learning_rate: 0.0001
+  entropy_coef: 0.001
+  num_steps_per_env: 32
+  num_learning_epochs: 4
+  max_iterations: 3000
+
+rewards:
+  ball_centering: 40.0
+  ball_speed: -8.0
+  ball_no_contact: -18.0

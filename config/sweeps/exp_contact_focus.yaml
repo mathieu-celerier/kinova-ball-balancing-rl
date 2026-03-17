@@ -1,0 +1,17 @@
+# Encourage continuous support contact and gentler plate motion.
+rewards:
+  ball_centering: 38.0
+  ball_speed: -8.0
+  ball_no_contact: -28.0
+  racquet_lin_vel_l2: -7.0
+  racquet_dist_from_initial_l2: -40.0
+
+ball_kick:
+  linear_velocity:
+    x: [-0.12, 0.12]
+    y: [-0.12, 0.12]
+    z: [-0.02, 0.02]
+  angular_velocity: [-0.35, 0.35]
+
+ppo:
+  max_iterations: 3000

@@ -1,0 +1,12 @@
+# Stronger emphasis on removing ball kinetic energy.
+rewards:
+  ball_centering: 35.0
+  ball_speed: -12.0
+  ball_speed_lin_weight: 1.25
+  ball_speed_ang_weight: 1.25
+  ball_no_contact: -18.0
+  racquet_dist_from_initial_l2: -25.0
+
+ppo:
+  entropy_coef: 0.002
+  max_iterations: 3000

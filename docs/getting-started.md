@@ -73,6 +73,10 @@ The registered tasks now load that YAML automatically at import time. To point t
 export MJLAB_KINOVA_TASK_PARAMS=/path/to/task_parameters.yaml
 ```
 
+The repository also includes a small initial sweep under `config/sweeps/`.
+
+Those sweep configs are set up as medium runs with `ppo.max_iterations: 3000`.
+
 That file is the easiest place to tune:
 
 - ball properties,
