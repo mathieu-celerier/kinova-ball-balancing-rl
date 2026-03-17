@@ -520,7 +520,7 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
             },
         ),
         "ball_no_contact_penalty": RewardTermCfg(
-            func=bb_mdp.ball_no_contact_mujoco,
+            func=bb_mdp.ball_no_contact_after_first_contact,
             weight=rewards.ball_no_contact,
             params={
                 "ball_geom_name": "ball/ball_geom",

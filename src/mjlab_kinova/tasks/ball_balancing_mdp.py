@@ -8,6 +8,7 @@ import mujoco
 import torch
 
 from mjlab.entity import Entity
+from mjlab.managers.manager_base import ManagerTermBase
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
 from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
@@ -339,6 +340,26 @@ def ball_no_contact_mujoco(
     if torch.any(active_pair):
         no_contact[contact_worldid[active_pair].long()] = 0.0
     return no_contact
+
+
+class ball_no_contact_after_first_contact(ManagerTermBase):
+    """Penalty is inactive until an env has established ball-racquet contact once."""
+
+    def __init__(self, cfg, env: "ManagerBasedRlEnv"):
+        super().__init__(env)
+        self.params = cfg.params
+        self._has_seen_contact = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+
+    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._has_seen_contact[env_ids] = False
+
+    def __call__(self, env: "ManagerBasedRlEnv", **kwargs) -> torch.Tensor:
+        no_contact = ball_no_contact_mujoco(env=env, **kwargs)
+        has_contact = no_contact == 0.0
+        self._has_seen_contact |= has_contact
+        return no_contact * self._has_seen_contact.float()
 
 
 def ball_no_contact_xy_proxy(
