@@ -25,6 +25,7 @@ This site is organized around the actual problem the code is solving:
 - `Mjlab-BallBalancing-Kinova-Baseline`: explicit baseline alias
 - `Mjlab-BallBalancing-Kinova-Cartesian`: Cartesian end-effector action variant
 - `Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand`: baseline without robot model randomization
+- `Mjlab-BallBalancing-Kinova-BaselineNoRand`: baseline with deterministic resets and no randomization
 - `Mjlab-BallBalancing-Kinova-Play`: play-mode alias
 
 ## Reading Order

@@ -21,6 +21,10 @@ _register_variant(
     "Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand",
     "baseline_no_model_rand",
 )
+_register_variant(
+    "Mjlab-BallBalancing-Kinova-BaselineNoRand",
+    "baseline_no_rand",
+)
 
 # Backward-compatible play alias for older commands.
 _play_params = load_default_task_parameters()

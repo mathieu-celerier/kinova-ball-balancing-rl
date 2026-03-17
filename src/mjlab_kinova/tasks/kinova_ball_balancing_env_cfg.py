@@ -28,7 +28,7 @@ from . import ball_balancing_mdp as bb_mdp
 from .policy_actions import InitialFramePositionActionCfg
 from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
-PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand"]
+PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand", "baseline_no_rand"]
 
 
 def robot_joints_cfg() -> SceneEntityCfg:
@@ -73,8 +73,13 @@ class PolicySpec:
     experiment_name: str
     action_kind: Literal["joint", "cartesian"]
     actor_terms: tuple[str, ...]
+    use_observation_noise: bool
+    randomize_ball_reset: bool
+    randomize_ball_properties: bool
+    randomize_pd_gains: bool
     randomize_robot_model: bool
     randomize_null_space_init: bool
+    use_ball_kick: bool
 
 
 POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
@@ -83,24 +88,52 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         experiment_name="kinova_ball_balancing_baseline",
         action_kind="joint",
         actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
+        use_observation_noise=True,
+        randomize_ball_reset=True,
+        randomize_ball_properties=True,
+        randomize_pd_gains=True,
         randomize_robot_model=True,
         randomize_null_space_init=True,
+        use_ball_kick=True,
     ),
     "cartesian": PolicySpec(
         variant="cartesian",
         experiment_name="kinova_ball_balancing_cartesian",
         action_kind="cartesian",
         actor_terms=("ee_pos", "ee_vel", "ee_ft_wrench"),
+        use_observation_noise=True,
+        randomize_ball_reset=True,
+        randomize_ball_properties=True,
+        randomize_pd_gains=True,
         randomize_robot_model=True,
         randomize_null_space_init=False,
+        use_ball_kick=True,
     ),
     "baseline_no_model_rand": PolicySpec(
         variant="baseline_no_model_rand",
         experiment_name="kinova_ball_balancing_baseline_no_model_rand",
         action_kind="joint",
         actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
+        use_observation_noise=True,
+        randomize_ball_reset=True,
+        randomize_ball_properties=True,
+        randomize_pd_gains=True,
         randomize_robot_model=False,
         randomize_null_space_init=True,
+        use_ball_kick=True,
+    ),
+    "baseline_no_rand": PolicySpec(
+        variant="baseline_no_rand",
+        experiment_name="kinova_ball_balancing_baseline_no_rand",
+        action_kind="joint",
+        actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
+        use_observation_noise=False,
+        randomize_ball_reset=False,
+        randomize_ball_properties=False,
+        randomize_pd_gains=False,
+        randomize_robot_model=False,
+        randomize_null_space_init=False,
+        use_ball_kick=False,
     ),
 }
 
@@ -258,7 +291,7 @@ def kinova_ppo_runner_cfg(
 
 
 def _actor_observation_terms(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[str, ObservationTermCfg]:
-    actor_terms = _shared_observation_terms(use_noise=not play, params=params)
+    actor_terms = _shared_observation_terms(use_noise=spec.use_observation_noise and not play, params=params)
     return {name: actor_terms[name] for name in spec.actor_terms}
 
 
@@ -361,6 +394,11 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
     joint_reset_range = (
         randomization.null_space_joint_offset if spec.randomize_null_space_init else (0.0, 0.0)
     )
+    ball_xy_range = ball_reset.xy_range if spec.randomize_ball_reset else (0.0, 0.0)
+    ball_lin_vel_x_range = ball_reset.linear_velocity.x if spec.randomize_ball_reset else (0.0, 0.0)
+    ball_lin_vel_y_range = ball_reset.linear_velocity.y if spec.randomize_ball_reset else (0.0, 0.0)
+    ball_lin_vel_z_range = ball_reset.linear_velocity.z if spec.randomize_ball_reset else (0.0, 0.0)
+    ball_ang_vel_range = ball_reset.angular_velocity if spec.randomize_ball_reset else (0.0, 0.0)
     events = {
         "reset_robot_joints": EventTermCfg(
             func=mdp.reset_joints_by_offset,
@@ -377,17 +415,20 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "xy_range": ball_reset.xy_range,
+                "xy_range": ball_xy_range,
                 "z_offset": ball_reset.z_offset,
                 "x_offset": ball_reset.x_offset,
                 "y_offset": ball_reset.y_offset,
-                "lin_vel_x_range": ball_reset.linear_velocity.x,
-                "lin_vel_y_range": ball_reset.linear_velocity.y,
-                "lin_vel_z_range": ball_reset.linear_velocity.z,
-                "ang_vel_range": ball_reset.angular_velocity,
+                "lin_vel_x_range": ball_lin_vel_x_range,
+                "lin_vel_y_range": ball_lin_vel_y_range,
+                "lin_vel_z_range": ball_lin_vel_z_range,
+                "ang_vel_range": ball_ang_vel_range,
             },
         ),
-        "randomize_ball_mass": EventTermCfg(
+    }
+
+    if spec.randomize_ball_properties:
+        events["randomize_ball_mass"] = EventTermCfg(
             func=bb_mdp.randomize_body_mass,
             mode="reset",
             params={
@@ -395,8 +436,10 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
                 "mass_range": randomization.ball_mass_scale,
                 "operation": "scale",
             },
-        ),
-        "randomize_pd_gains": EventTermCfg(
+        )
+
+    if spec.randomize_pd_gains:
+        events["randomize_pd_gains"] = EventTermCfg(
             func=mdp.randomize_pd_gains,
             mode="reset",
             params={
@@ -405,8 +448,7 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
                 "asset_cfg": robot_actuators_cfg(),
                 "operation": "scale",
             },
-        ),
-    }
+        )
 
     if spec.randomize_robot_model:
         events["randomize_robot_model"] = EventTermCfg(

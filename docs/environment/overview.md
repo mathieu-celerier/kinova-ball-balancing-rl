@@ -45,3 +45,8 @@ This is closer to dynamic stabilization than to static set-point regulation.
 
 - same observation/action interface as baseline
 - disables robot inertial randomization for ablation
+
+### BaselineNoRand
+
+- same observation/action interface as baseline
+- disables observation noise, stochastic resets, parameter randomization, and training kicks

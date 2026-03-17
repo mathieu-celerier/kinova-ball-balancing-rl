@@ -26,6 +26,7 @@ Other variants:
 uv run train Mjlab-BallBalancing-Kinova-Baseline --env.scene.num-envs 512
 uv run train Mjlab-BallBalancing-Kinova-Cartesian --env.scene.num-envs 512
 uv run train Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand --env.scene.num-envs 512
+uv run train Mjlab-BallBalancing-Kinova-BaselineNoRand --env.scene.num-envs 512
 ```
 
 ## Play a Trained Policy
