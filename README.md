@@ -32,10 +32,17 @@ uv sync
 uv run train Mjlab-BallBalancing-Kinova --env.scene.num-envs 512
 ```
 
+Kinova training defaults to TensorBoard logging. To use Weights & Biases for a specific run:
+
+```bash
+uv run train Mjlab-BallBalancing-Kinova --agent.logger wandb
+```
+
 ## Play
 
 ```bash
-uv run play Mjlab-BallBalancing-Kinova --checkpoint-file logs/rsl_rl/kinova_ball_balancing/...
+uv run play Mjlab-BallBalancing-Kinova \
+  --checkpoint-file logs/rsl_rl/kinova_ball_balancing_baseline/.../model_*.pt
 ```
 
 ## Serve the Docs

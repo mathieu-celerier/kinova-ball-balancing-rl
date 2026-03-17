@@ -4,6 +4,8 @@
 
 - `src/mjlab_kinova/tasks`: task registration, environment config, MDP terms, custom actions
 - `src/mjlab_kinova/robot`: MuJoCo XML, meshes, actuator constants
+- `config/sweeps`: small preset parameter variations for faster experimentation
+- `scripts/zsh`: project-local shell completion helpers
 - `typings/mujoco`: local typing support
 - `logs`: training outputs
 

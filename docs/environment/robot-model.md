@@ -8,8 +8,8 @@ The articulated robot is a 7-DoF arm with MuJoCo position actuators configured i
 
 Actuator groups:
 
-- joints `1-4`: stiffness `300`, damping `50`, effort limit `60`
-- joints `5-7`: stiffness `200`, damping `40`, effort limit `60`
+- joints `1-4`: stiffness `300`, damping `50`, effort limit `95`
+- joints `5-7`: stiffness `200`, damping `40`, effort limit `45`
 
 The home pose is also defined there and used as the nominal initial state and posture target.
 

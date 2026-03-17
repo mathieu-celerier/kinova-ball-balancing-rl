@@ -85,6 +85,7 @@ Positive terms:
 Negative terms:
 
 - `ball_speed`: `-8.0`
+- `ball_height_above_plate`: `-50.0`
 - `ball_no_contact_penalty`: `-18.0`
 - `action_rate_l2`: `-0.01`
 - `action_acc_l2`: `-0.0015`
@@ -92,15 +93,16 @@ Negative terms:
 - `joint_acc_l2`: `-0.0001`
 - `joint_torque_l2`: `-0.0002`
 - `joint_pos_limits`: `-0.2`
+- `plate_drop_under_ball`: `-2.0`
 - `racquet_lin_vel_l2`: `-5.0`
 - `racquet_dist_from_initial_l2`: `-30.0`
 
 ### Key Reward Intuition
 
-`ball_centering` rewards small radial distance in the plate frame:
+`ball_centering` rewards small radial distance in the plate frame, but only while ball-racquet contact is active:
 
 ```text
-r_center = exp(-(dx^2 + dy^2) / std^2)
+r_center = contact(ball, plate) * exp(-(dx^2 + dy^2) / std^2)
 ```
 
 `ball_speed` penalizes both translation and spin:
@@ -110,6 +112,16 @@ penalty_speed = ||v_ball^plate||^2 + ||omega_ball^plate||^2
 ```
 
 This makes the task care about damping, not only recentering.
+
+`ball_height_above_plate` penalizes plate-frame height above a soft threshold before any termination is involved.
+
+`plate_drop_under_ball` penalizes moving the plate down along its own normal while the ball is still close above it. This specifically discourages the local-minimum strategy of letting the racquet fall away from the ball while preserving short-term XY centering.
+
+This combination is deliberate:
+
+- `ball_no_contact_penalty` makes unsupported flight expensive,
+- contact-gated `ball_centering` prevents the agent from earning centering reward while the ball is no longer supported,
+- `plate_drop_under_ball` discourages the racquet-drop local minimum.
 
 ## Terminations
 
@@ -123,6 +135,27 @@ The loss condition includes:
 - plate-frame radial distance above `0.16 m`
 - plate-frame height below `-0.06 m`
 - world height below `0.05 m`
+
+There is no separate `ball_too_high` termination anymore. High plate-frame ball height is handled as a soft penalty rather than an immediate episode end.
+
+## Training Diagnostics
+
+The printed training summary mixes PPO optimization numbers with environment-side episode statistics.
+
+Useful interpretation rules:
+
+- `Mean reward` is average return over completed episodes collected recently.
+- `Mean episode length` is measured in environment steps.
+- `Episode_Reward/*` entries are averaged per-episode contributions normalized by the configured episode horizon.
+- `Episode_Termination/*` entries are reset counts averaged over the current logging window, so they can be greater than `1.0`.
+
+For this task, the most informative trends are usually:
+
+- rising `Mean reward`,
+- rising `Mean episode length`,
+- less negative `Episode_Reward/ball_no_contact_penalty`,
+- less negative `Episode_Reward/plate_drop_under_ball`,
+- decreasing `Episode_Termination/ball_fell_off`.
 
 ## Reset and Randomization
 

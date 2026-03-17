@@ -60,7 +60,7 @@ Why it matters:
 Relation to this repo:
 
 - the repo also treats the task as dynamic stabilization rather than static centering,
-- this is visible in the reward design where `ball_centering` is paired with `ball_speed`,
+- this is visible in the reward design where contact-gated `ball_centering` is paired with `ball_speed`,
 - the simulation timing in `task_parameters.py` uses `timestep = 0.002` and `decimation = 5`, giving a `0.01 s` policy period, which is appropriate for contact-sensitive balancing.
 
 ### Awtar et al. (2002)
@@ -139,7 +139,8 @@ The repo reflects that tradeoff by:
 - giving the actor only robot and wrench observations,
 - giving the critic privileged ball state in the plate frame,
 - injecting actor-side observation noise,
-- using contact-aware reward terms instead of purely geometric support heuristics.
+- using contact-aware reward terms instead of purely geometric support heuristics,
+- only rewarding plate-frame centering while MuJoCo contact confirms the ball is actually supported.
 
 ## What This Repo Is Actually Optimizing
 
@@ -158,6 +159,8 @@ This is visible in the parameterization:
 - `ball_centering = 40.0`
 - `ball_speed = -8.0`
 - `ball_no_contact = -18.0`
+- `ball_height_above_plate = -50.0`
+- `plate_drop_under_ball = -2.0`
 - `racquet_lin_vel_l2 = -5.0`
 - `racquet_dist_from_initial_l2 = -30.0`
 

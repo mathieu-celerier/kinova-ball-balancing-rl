@@ -16,6 +16,7 @@ This site is organized around the actual problem the code is solving:
 - how to install and run training,
 - what the environment exposes as observations and actions,
 - how rewards, resets, and terminations are defined,
+- how contact-aware reward shaping changes the learned behavior,
 - why the plate frame and contact terms matter physically,
 - where the relevant code lives.
 

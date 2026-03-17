@@ -14,6 +14,7 @@ The robot does not actuate the ball directly. It acts on the ball only through:
 A successful controller should:
 
 - keep the ball near the plate center,
+- do so while the ball is actually supported by the plate,
 - reduce the ball's linear and angular speed,
 - maintain contact with the plate,
 - avoid aggressive arm motion that solves the task in an unrealistic way.
@@ -23,6 +24,7 @@ A successful controller should:
 A ball near the center is not necessarily stable. It may still have high speed and immediately roll away. That is why the task reward and the documentation focus on both:
 
 - position error,
+- contact support,
 - kinetic state.
 
 This is closer to dynamic stabilization than to static set-point regulation.
@@ -33,12 +35,14 @@ This is closer to dynamic stabilization than to static set-point regulation.
 
 - action space: joint-space position commands
 - actor observations: joint state, end-effector state, F/T wrench
+- centering reward: active only while ball-racquet contact is present
 - randomization: ball mass, PD gains, null-space reset, robot model
 
 ### Cartesian
 
 - action space: end-effector position around the episode's initial frame
 - actor observations: end-effector position, velocity, F/T wrench
+- centering reward: active only while ball-racquet contact is present
 - randomization: ball mass, PD gains, robot model
 
 ### BaselineNoRobotModelRand

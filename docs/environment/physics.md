@@ -75,6 +75,14 @@ This discourages a degenerate strategy where the robot impulsively throws the ba
 
 From a physics perspective, sustained balancing means the plate is acting as support, not as a launcher.
 
+The current reward shaping goes a step further:
+
+- centering reward is only active while contact is present,
+- no-contact states are penalized directly,
+- dropping the plate down away from the ball is penalized separately.
+
+That makes "supporting the ball near the center" the profitable behavior, not merely "keeping the plate-frame XY error small for a short time."
+
 ## Role of Force/Torque Sensing
 
 The actor receives end-effector force/torque wrench measurements.

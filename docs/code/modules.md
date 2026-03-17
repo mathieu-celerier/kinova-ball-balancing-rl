@@ -24,7 +24,7 @@ Defines task-local computational pieces such as:
 
 - ball state in the plate frame
 - wrench access
-- reward helpers
+- contact-aware reward helpers
 - termination helpers
 - ball reset
 - disturbance kicks
