@@ -114,17 +114,22 @@ class RewardParameters:
     ball_height_soft_threshold: float = 0.06
     ball_no_contact: float = -18.0
     ball_no_contact_dist: float = 0.0
-    action_rate_l2: float = -0.01
-    action_acc_l2: float = -0.0015
-    joint_vel_l2: float = -0.0005
+    pre_contact_action_rate_l2: float = -0.08
+    post_contact_action_rate_l2: float = -0.01
+    pre_contact_action_acc_l2: float = -0.012
+    post_contact_action_acc_l2: float = -0.0015
+    pre_contact_joint_vel_l2: float = -0.003
+    post_contact_joint_vel_l2: float = -0.0005
     joint_acc_l2: float = -0.0001
     joint_torque_l2: float = -0.0002
     joint_pos_limits: float = -0.2
     plate_drop_under_ball: float = -2.0
     plate_drop_ball_height_threshold: float = 0.01
     plate_drop_xy_radius: float = 0.12
-    racquet_lin_vel_l2: float = -5.0
-    racquet_dist_from_initial_l2: float = -30.0
+    pre_contact_racquet_lin_vel_l2: float = -20.0
+    post_contact_racquet_lin_vel_l2: float = -4.0
+    pre_contact_racquet_dist_from_initial_l2: float = -120.0
+    post_contact_racquet_dist_from_initial_l2: float = -20.0
 
 
 @dataclass(frozen=True)

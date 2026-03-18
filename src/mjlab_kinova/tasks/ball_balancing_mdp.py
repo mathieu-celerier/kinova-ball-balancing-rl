@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from typing import Any, Callable
 
 import mujoco
 import torch
@@ -360,6 +361,43 @@ class ball_no_contact_after_first_contact(ManagerTermBase):
         has_contact = no_contact == 0.0
         self._has_seen_contact |= has_contact
         return no_contact * self._has_seen_contact.float()
+
+
+class contact_phase_reward(ManagerTermBase):
+    """Gate an arbitrary reward term by whether first contact has already happened."""
+
+    def __init__(self, cfg, env: "ManagerBasedRlEnv"):
+        super().__init__(env)
+        self.params = cfg.params
+        self._has_seen_contact = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+
+    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        self._has_seen_contact[env_ids] = False
+
+    def __call__(
+        self,
+        env: "ManagerBasedRlEnv",
+        term_func: Callable[..., torch.Tensor],
+        term_kwargs: dict[str, Any] | None = None,
+        ball_geom_name: str = "ball/ball_geom",
+        racquet_geom_name: str = "robot/plate_collision",
+        max_contact_dist: float = 0.0,
+        activate_after_contact: bool = True,
+    ) -> torch.Tensor:
+        no_contact = ball_no_contact_mujoco(
+            env=env,
+            ball_geom_name=ball_geom_name,
+            racquet_geom_name=racquet_geom_name,
+            max_contact_dist=max_contact_dist,
+        )
+        has_contact = no_contact == 0.0
+        self._has_seen_contact |= has_contact
+
+        base_reward = term_func(env, **(term_kwargs or {}))
+        phase_mask = self._has_seen_contact if activate_after_contact else ~self._has_seen_contact
+        return base_reward * phase_mask.float()
 
 
 def ball_no_contact_xy_proxy(
