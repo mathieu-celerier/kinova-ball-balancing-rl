@@ -396,6 +396,8 @@ class contact_phase_reward(ManagerTermBase):
         self._has_seen_contact |= has_contact
 
         base_reward = term_func(env, **(term_kwargs or {}))
+        if base_reward.ndim > 1:
+            base_reward = base_reward.reshape(base_reward.shape[0], -1).sum(dim=-1)
         phase_mask = self._has_seen_contact if activate_after_contact else ~self._has_seen_contact
         return base_reward * phase_mask.float()
 
