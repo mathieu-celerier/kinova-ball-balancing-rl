@@ -133,7 +133,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         randomize_pd_gains=False,
         randomize_robot_model=False,
         randomize_null_space_init=False,
-        use_ball_kick=False,
+        use_ball_kick=True,
     ),
 }
 

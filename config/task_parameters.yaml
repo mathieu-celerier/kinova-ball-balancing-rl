@@ -56,7 +56,7 @@ randomization:
 
 rewards:
   is_alive: 0.2
-  ball_centering: 12.0
+  ball_centering: 20.0
   ball_centering_std: 0.06
   ball_speed: -8.0
   ball_speed_lin_weight: 1.0

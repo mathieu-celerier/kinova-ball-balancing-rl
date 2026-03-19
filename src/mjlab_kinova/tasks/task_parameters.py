@@ -105,7 +105,7 @@ class RandomizationParameters:
 @dataclass(frozen=True)
 class RewardParameters:
     is_alive: float = 0.2
-    ball_centering: float = 12.0
+    ball_centering: float = 20.0
     ball_centering_std: float = 0.06
     ball_speed: float = -8.0
     ball_speed_lin_weight: float = 1.0
