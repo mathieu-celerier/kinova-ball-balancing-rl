@@ -30,14 +30,14 @@ KINOVA_ARTICULATION = EntityArticulationInfoCfg(
     actuators=(
         BuiltinPositionActuatorCfg(
             target_names_expr=("joint_1", "joint_2", "joint_3", "joint_4"),
-            stiffness=300.0,
-            damping=50.0,
+            stiffness=40.0,
+            damping=15.0,
             effort_limit=95.0,
         ),
         BuiltinPositionActuatorCfg(
             target_names_expr=("joint_5", "joint_6", "joint_7"),
-            stiffness=200.0,
-            damping=40.0,
+            stiffness=15.0,
+            damping=8.5,
             effort_limit=45.0,
         ),
     ),
