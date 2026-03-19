@@ -73,7 +73,7 @@ rewards:
   post_contact_joint_vel_l2: -0.004
   joint_acc_l2: -0.001
   joint_torque_l2: -0.002
-  joint_pos_limits: -0.2
+  joint_pos_limits: -5.0
   plate_drop_under_ball: -5.0
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12

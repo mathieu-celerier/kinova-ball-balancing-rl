@@ -122,7 +122,7 @@ class RewardParameters:
     post_contact_joint_vel_l2: float = -0.004
     joint_acc_l2: float = -0.001
     joint_torque_l2: float = -0.002
-    joint_pos_limits: float = -0.2
+    joint_pos_limits: float = -5.0
     plate_drop_under_ball: float = -5.0
     plate_drop_ball_height_threshold: float = 0.01
     plate_drop_xy_radius: float = 0.12
