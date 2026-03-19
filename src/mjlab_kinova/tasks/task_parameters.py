@@ -105,7 +105,7 @@ class RandomizationParameters:
 @dataclass(frozen=True)
 class RewardParameters:
     is_alive: float = 0.2
-    ball_centering: float = 40.0
+    ball_centering: float = 12.0
     ball_centering_std: float = 0.06
     ball_speed: float = -8.0
     ball_speed_lin_weight: float = 1.0
@@ -114,22 +114,22 @@ class RewardParameters:
     ball_height_soft_threshold: float = 0.06
     ball_no_contact: float = -18.0
     ball_no_contact_dist: float = 0.0
-    pre_contact_action_rate_l2: float = -0.08
-    post_contact_action_rate_l2: float = -0.01
-    pre_contact_action_acc_l2: float = -0.012
-    post_contact_action_acc_l2: float = -0.0015
-    pre_contact_joint_vel_l2: float = -0.003
-    post_contact_joint_vel_l2: float = -0.0005
-    joint_acc_l2: float = -0.0001
-    joint_torque_l2: float = -0.0002
+    pre_contact_action_rate_l2: float = -1.0
+    post_contact_action_rate_l2: float = -0.1
+    pre_contact_action_acc_l2: float = -0.15
+    post_contact_action_acc_l2: float = -0.02
+    pre_contact_joint_vel_l2: float = -0.02
+    post_contact_joint_vel_l2: float = -0.004
+    joint_acc_l2: float = -0.001
+    joint_torque_l2: float = -0.002
     joint_pos_limits: float = -0.2
-    plate_drop_under_ball: float = -2.0
+    plate_drop_under_ball: float = -5.0
     plate_drop_ball_height_threshold: float = 0.01
     plate_drop_xy_radius: float = 0.12
-    pre_contact_racquet_lin_vel_l2: float = -20.0
-    post_contact_racquet_lin_vel_l2: float = -4.0
-    pre_contact_racquet_dist_from_initial_l2: float = -120.0
-    post_contact_racquet_dist_from_initial_l2: float = -20.0
+    pre_contact_racquet_lin_vel_l2: float = -80.0
+    post_contact_racquet_lin_vel_l2: float = -20.0
+    pre_contact_racquet_dist_from_initial_l2: float = -800.0
+    post_contact_racquet_dist_from_initial_l2: float = -120.0
 
 
 @dataclass(frozen=True)
