@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING
 from typing import Any, Callable
 
@@ -295,7 +296,9 @@ def _geom_id(env: "ManagerBasedRlEnv", geom_name: str) -> int:
 
     geom_id = geom_id_cache.get(geom_name)
     if geom_id is None:
-        geom_id = mujoco.mj_name2id(env.sim.mj_model, mujoco.mjtObj.mjOBJ_GEOM, geom_name)
+        geom_id = mujoco.mj_name2id(
+            env.sim.mj_model, mujoco.mjtObj.mjOBJ_GEOM, geom_name
+        )
         if geom_id < 0:
             raise ValueError(f"Geom '{geom_name}' was not found in the model.")
         geom_id_cache[geom_name] = int(geom_id)
@@ -328,8 +331,12 @@ def ball_no_contact_mujoco(
     contact_dist = env.sim.data.contact.dist[:ncon]
 
     pair_match = torch.logical_or(
-        torch.logical_and(contact_geom[:, 0] == ball_geom_id, contact_geom[:, 1] == racquet_geom_id),
-        torch.logical_and(contact_geom[:, 0] == racquet_geom_id, contact_geom[:, 1] == ball_geom_id),
+        torch.logical_and(
+            contact_geom[:, 0] == ball_geom_id, contact_geom[:, 1] == racquet_geom_id
+        ),
+        torch.logical_and(
+            contact_geom[:, 0] == racquet_geom_id, contact_geom[:, 1] == ball_geom_id
+        ),
     )
 
     active_pair = torch.logical_and(
@@ -351,7 +358,9 @@ class ball_no_contact_after_first_contact(ManagerTermBase):
     def __init__(self, cfg, env: "ManagerBasedRlEnv"):
         super().__init__(env)
         self.params = cfg.params
-        self._has_seen_contact = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+        self._has_seen_contact = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.bool
+        )
 
     def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
         if env_ids is None:
@@ -371,7 +380,9 @@ class contact_phase_reward(ManagerTermBase):
     def __init__(self, cfg, env: "ManagerBasedRlEnv"):
         super().__init__(env)
         self.params = cfg.params
-        self._has_seen_contact = torch.zeros(self.num_envs, device=self.device, dtype=torch.bool)
+        self._has_seen_contact = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.bool
+        )
 
     def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
         if env_ids is None:
@@ -400,7 +411,11 @@ class contact_phase_reward(ManagerTermBase):
         base_reward = term_func(env, **(term_kwargs or {}))
         if base_reward.ndim > 1:
             base_reward = base_reward.reshape(base_reward.shape[0], -1).sum(dim=-1)
-        phase_mask = self._has_seen_contact if activate_after_contact else ~self._has_seen_contact
+        phase_mask = (
+            self._has_seen_contact
+            if activate_after_contact
+            else ~self._has_seen_contact
+        )
         return base_reward * phase_mask.float()
 
 
@@ -440,9 +455,13 @@ def racquet_lin_vel_l2(
     """Penalty on squared racquet (plate body) linear speed in world frame."""
     robot: Entity = env.scene[plate_asset_cfg.name]
     if hasattr(robot.data, "body_link_lin_vel_w"):
-        plate_vel_w = robot.data.body_link_lin_vel_w[:, plate_asset_cfg.body_ids].squeeze(1)
+        plate_vel_w = robot.data.body_link_lin_vel_w[
+            :, plate_asset_cfg.body_ids
+        ].squeeze(1)
     else:
-        plate_vel_w = robot.data.body_link_vel_w[:, plate_asset_cfg.body_ids, :3].squeeze(1)
+        plate_vel_w = robot.data.body_link_vel_w[
+            :, plate_asset_cfg.body_ids, :3
+        ].squeeze(1)
     return torch.sum(torch.square(plate_vel_w), dim=-1)
 
 
@@ -475,16 +494,22 @@ def _compute_nominal_racquet_pos_w(
     current_joint_vel = robot.data.joint_vel.clone()
 
     home_joint_map = KINOVA_CFG.init_state.joint_pos
-    home_joint_pos = torch.tensor(
-        [home_joint_map[name] for name in robot.joint_names],
-        device=env.device,
-        dtype=current_joint_pos.dtype,
-    ).unsqueeze(0).expand(env.num_envs, -1)
+    home_joint_pos = (
+        torch.tensor(
+            [home_joint_map[name] for name in robot.joint_names],
+            device=env.device,
+            dtype=current_joint_pos.dtype,
+        )
+        .unsqueeze(0)
+        .expand(env.num_envs, -1)
+    )
     zero_joint_vel = torch.zeros_like(current_joint_vel)
 
     robot.write_joint_state_to_sim(home_joint_pos, zero_joint_vel)
     env.sim.forward()
-    nominal_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+    nominal_pos_w = (
+        robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+    )
 
     robot.write_joint_state_to_sim(current_joint_pos, current_joint_vel)
     env.sim.forward()
@@ -503,17 +528,25 @@ def _compute_nominal_racquet_pose_w(
     current_joint_vel = robot.data.joint_vel.clone()
 
     home_joint_map = KINOVA_CFG.init_state.joint_pos
-    home_joint_pos = torch.tensor(
-        [home_joint_map[name] for name in robot.joint_names],
-        device=env.device,
-        dtype=current_joint_pos.dtype,
-    ).unsqueeze(0).expand(env.num_envs, -1)
+    home_joint_pos = (
+        torch.tensor(
+            [home_joint_map[name] for name in robot.joint_names],
+            device=env.device,
+            dtype=current_joint_pos.dtype,
+        )
+        .unsqueeze(0)
+        .expand(env.num_envs, -1)
+    )
     zero_joint_vel = torch.zeros_like(current_joint_vel)
 
     robot.write_joint_state_to_sim(home_joint_pos, zero_joint_vel)
     env.sim.forward()
-    nominal_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
-    nominal_quat_w = robot.data.body_link_quat_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+    nominal_pos_w = (
+        robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+    )
+    nominal_quat_w = (
+        robot.data.body_link_quat_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+    )
 
     robot.write_joint_state_to_sim(current_joint_pos, current_joint_vel)
     env.sim.forward()
@@ -527,12 +560,20 @@ def _as_env_ids(env: "ManagerBasedRlEnv", env_ids: torch.Tensor | None) -> torch
     return env_ids.to(device=env.device, dtype=torch.long)
 
 
-def _body_global_id(robot: Entity, body_ids: torch.Tensor | list[int] | tuple[int, ...]) -> int:
-    local_body_id = int(torch.as_tensor(body_ids, device=robot.data.body_link_pos_w.device).flatten()[0].item())
+def _body_global_id(
+    robot: Entity, body_ids: torch.Tensor | list[int] | tuple[int, ...]
+) -> int:
+    local_body_id = int(
+        torch.as_tensor(body_ids, device=robot.data.body_link_pos_w.device)
+        .flatten()[0]
+        .item()
+    )
     return int(robot.indexing.body_ids[local_body_id].item())
 
 
-def _joint_ids_from_cfg(robot: Entity, asset_cfg: SceneEntityCfg, device: torch.device) -> torch.Tensor:
+def _joint_ids_from_cfg(
+    robot: Entity, asset_cfg: SceneEntityCfg, device: torch.device
+) -> torch.Tensor:
     if asset_cfg.joint_ids is not None:
         return torch.as_tensor(asset_cfg.joint_ids, device=device, dtype=torch.long)
     if asset_cfg.joint_names is None:
@@ -541,7 +582,21 @@ def _joint_ids_from_cfg(robot: Entity, asset_cfg: SceneEntityCfg, device: torch.
     return torch.tensor(joint_ids, device=device, dtype=torch.long)
 
 
-def _get_racquet_jacobian_buffers(env: "ManagerBasedRlEnv", body_id: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+def _accumulate_profile_stat(
+    env: "ManagerBasedRlEnv",
+    key: str,
+    value: float,
+) -> None:
+    if not getattr(env, "_profile_timing", False):
+        return
+    if not hasattr(env, "_profile_stats"):
+        return
+    env._profile_stats[key] = env._profile_stats.get(key, 0.0) + value
+
+
+def _get_racquet_jacobian_buffers(
+    env: "ManagerBasedRlEnv", body_id: int
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     cache = getattr(env, "_racquet_jacobian_cache", None)
     cache_key = (body_id, env.num_envs, env.sim.mj_model.nv)
     if cache is None or cache.get("key") != cache_key:
@@ -572,16 +627,17 @@ def reset_joints_preserving_racquet_pose(
     plate_asset_cfg: SceneEntityCfg,
     position_range: tuple[float, float],
     velocity_range: tuple[float, float] = (0.0, 0.0),
-    max_iters: int = 32,
+    max_iters: int = 16,
     damping: float = 0.05,
     max_dq: float = 0.2,
     position_weight: float = 1.0,
     orientation_weight: float = 1.0,
     posture_weight: float = 0.02,
-    pose_tol: float = 1e-5,
-    rot_tol: float = 1e-4,
+    pose_tol: float = 1e-3,
+    rot_tol: float = 1e-2,
 ) -> None:
     """Randomize joint posture while preserving the nominal racquet pose."""
+    profile_start = time.perf_counter() if getattr(env, "_profile_timing", False) else 0.0
     del velocity_range  # Reset starts from rest regardless of sampled posture.
 
     env_ids = _as_env_ids(env, env_ids)
@@ -681,6 +737,10 @@ def reset_joints_preserving_racquet_pose(
     robot.write_joint_state_to_sim(final_q, final_qd, env_ids=env_ids)
     robot.set_joint_position_target(final_q, env_ids=env_ids)
     robot.set_joint_velocity_target(final_qd, env_ids=env_ids)
+    if getattr(env, "_profile_timing", False):
+        elapsed = time.perf_counter() - profile_start
+        _accumulate_profile_stat(env, "pose_reset_ik_time", elapsed)
+        _accumulate_profile_stat(env, "pose_reset_ik_count", 1.0)
 
 
 def body_external_force(
@@ -727,8 +787,12 @@ def reset_ball_on_plate(
     robot: Entity = env.scene[plate_asset_cfg.name]
     ball: Entity = env.scene[ball_name]
 
-    plate_pos_w = robot.data.body_link_pos_w[env_ids][:, plate_asset_cfg.body_ids].squeeze(1)
-    plate_quat_w = robot.data.body_link_quat_w[env_ids][:, plate_asset_cfg.body_ids].squeeze(1)
+    plate_pos_w = robot.data.body_link_pos_w[env_ids][
+        :, plate_asset_cfg.body_ids
+    ].squeeze(1)
+    plate_quat_w = robot.data.body_link_quat_w[env_ids][
+        :, plate_asset_cfg.body_ids
+    ].squeeze(1)
 
     if racquet_x_radius is not None and racquet_y_radius is not None:
         u = sample_uniform(0.0, 1.0, (len(env_ids),), device=env.device)
@@ -752,12 +816,33 @@ def reset_ball_on_plate(
     pose = torch.cat((ball_pos_w, quat_w), dim=-1)
     vel = torch.stack(
         (
-            sample_uniform(lin_vel_x_range[0], lin_vel_x_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(lin_vel_y_range[0], lin_vel_y_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(lin_vel_z_range[0], lin_vel_z_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(
+                lin_vel_x_range[0],
+                lin_vel_x_range[1],
+                (len(env_ids),),
+                device=env.device,
+            ),
+            sample_uniform(
+                lin_vel_y_range[0],
+                lin_vel_y_range[1],
+                (len(env_ids),),
+                device=env.device,
+            ),
+            sample_uniform(
+                lin_vel_z_range[0],
+                lin_vel_z_range[1],
+                (len(env_ids),),
+                device=env.device,
+            ),
+            sample_uniform(
+                ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device
+            ),
+            sample_uniform(
+                ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device
+            ),
+            sample_uniform(
+                ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device
+            ),
         ),
         dim=-1,
     )
@@ -796,18 +881,39 @@ def kick_ball_velocity(
 
     kick_lin = torch.stack(
         (
-            sample_uniform(lin_vel_x_range[0], lin_vel_x_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(lin_vel_y_range[0], lin_vel_y_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(lin_vel_z_range[0], lin_vel_z_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(
+                lin_vel_x_range[0],
+                lin_vel_x_range[1],
+                (len(env_ids),),
+                device=env.device,
+            ),
+            sample_uniform(
+                lin_vel_y_range[0],
+                lin_vel_y_range[1],
+                (len(env_ids),),
+                device=env.device,
+            ),
+            sample_uniform(
+                lin_vel_z_range[0],
+                lin_vel_z_range[1],
+                (len(env_ids),),
+                device=env.device,
+            ),
         ),
         dim=-1,
     )
 
     kick_ang = torch.stack(
         (
-            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
-            sample_uniform(ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device),
+            sample_uniform(
+                ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device
+            ),
+            sample_uniform(
+                ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device
+            ),
+            sample_uniform(
+                ang_vel_range[0], ang_vel_range[1], (len(env_ids),), device=env.device
+            ),
         ),
         dim=-1,
     )

@@ -88,12 +88,12 @@ terminations:
   floor_height: 0.05
 
 simulation:
-  num_envs: 1
+  num_envs: 1024
   env_spacing: 2.0
   timestep: 0.002
-  iterations: 30
-  ls_iterations: 30
-  ccd_iterations: 80
+  iterations: 20
+  ls_iterations: 20
+  ccd_iterations: 40
   nconmax: 256
   njmax: 1024
   decimation: 5

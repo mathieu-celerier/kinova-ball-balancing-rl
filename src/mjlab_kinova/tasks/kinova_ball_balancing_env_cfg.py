@@ -240,6 +240,7 @@ def kinova_ball_balancing_env_cfg(
     )
 
     if play:
+        cfg.scene.num_envs = 1
         cfg.episode_length_s = params.simulation.play_episode_length_s
         cfg.observations["actor"].enable_corruption = False
 

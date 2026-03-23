@@ -141,12 +141,12 @@ class TerminationParameters:
 
 @dataclass(frozen=True)
 class SimulationParameters:
-    num_envs: int = 1
+    num_envs: int = 1024
     env_spacing: float = 2.0
     timestep: float = 0.002
-    iterations: int = 30
-    ls_iterations: int = 30
-    ccd_iterations: int = 80
+    iterations: int = 20
+    ls_iterations: int = 20
+    ccd_iterations: int = 40
     nconmax: int = 256
     njmax: int = 1024
     decimation: int = 5
