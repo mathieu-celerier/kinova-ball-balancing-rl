@@ -6,13 +6,15 @@ from typing import TYPE_CHECKING
 from typing import Any, Callable
 
 import mujoco
+import mujoco_warp as mjwarp
 import torch
+import warp as wp
 
 from mjlab.entity import Entity
 from mjlab.managers.manager_base import ManagerTermBase
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
-from mjlab.utils.lab_api.math import quat_apply, quat_apply_inverse
+from mjlab.utils.lab_api.math import compute_pose_error, quat_apply, quat_apply_inverse
 from mjlab.utils.lab_api.math import sample_uniform
 from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 
@@ -488,6 +490,197 @@ def _compute_nominal_racquet_pos_w(
     env.sim.forward()
 
     return nominal_pos_w
+
+
+def _compute_nominal_racquet_pose_w(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    """Compute the racquet world pose at the robot home joint configuration."""
+    robot: Entity = env.scene[plate_asset_cfg.name]
+
+    current_joint_pos = robot.data.joint_pos.clone()
+    current_joint_vel = robot.data.joint_vel.clone()
+
+    home_joint_map = KINOVA_CFG.init_state.joint_pos
+    home_joint_pos = torch.tensor(
+        [home_joint_map[name] for name in robot.joint_names],
+        device=env.device,
+        dtype=current_joint_pos.dtype,
+    ).unsqueeze(0).expand(env.num_envs, -1)
+    zero_joint_vel = torch.zeros_like(current_joint_vel)
+
+    robot.write_joint_state_to_sim(home_joint_pos, zero_joint_vel)
+    env.sim.forward()
+    nominal_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+    nominal_quat_w = robot.data.body_link_quat_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
+
+    robot.write_joint_state_to_sim(current_joint_pos, current_joint_vel)
+    env.sim.forward()
+
+    return nominal_pos_w, nominal_quat_w
+
+
+def _as_env_ids(env: "ManagerBasedRlEnv", env_ids: torch.Tensor | None) -> torch.Tensor:
+    if env_ids is None:
+        return torch.arange(env.num_envs, device=env.device, dtype=torch.long)
+    return env_ids.to(device=env.device, dtype=torch.long)
+
+
+def _body_global_id(robot: Entity, body_ids: torch.Tensor | list[int] | tuple[int, ...]) -> int:
+    local_body_id = int(torch.as_tensor(body_ids, device=robot.data.body_link_pos_w.device).flatten()[0].item())
+    return int(robot.indexing.body_ids[local_body_id].item())
+
+
+def _joint_ids_from_cfg(robot: Entity, asset_cfg: SceneEntityCfg, device: torch.device) -> torch.Tensor:
+    if asset_cfg.joint_ids is not None:
+        return torch.as_tensor(asset_cfg.joint_ids, device=device, dtype=torch.long)
+    if asset_cfg.joint_names is None:
+        return torch.arange(robot.num_joints, device=device, dtype=torch.long)
+    joint_ids, _ = robot.find_joints(asset_cfg.joint_names, preserve_order=True)
+    return torch.tensor(joint_ids, device=device, dtype=torch.long)
+
+
+def _get_racquet_jacobian_buffers(env: "ManagerBasedRlEnv", body_id: int) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    cache = getattr(env, "_racquet_jacobian_cache", None)
+    cache_key = (body_id, env.num_envs, env.sim.mj_model.nv)
+    if cache is None or cache.get("key") != cache_key:
+        with wp.ScopedDevice(env.sim.wp_device):
+            jacp_wp = wp.zeros((env.num_envs, 3, env.sim.mj_model.nv), dtype=float)
+            jacr_wp = wp.zeros((env.num_envs, 3, env.sim.mj_model.nv), dtype=float)
+            point_wp = wp.zeros(env.num_envs, dtype=wp.vec3)
+            body_wp = wp.zeros(env.num_envs, dtype=wp.int32)
+            body_wp.fill_(body_id)
+        cache = {
+            "key": cache_key,
+            "jacp_wp": jacp_wp,
+            "jacr_wp": jacr_wp,
+            "point_wp": point_wp,
+            "body_wp": body_wp,
+            "jacp_torch": wp.to_torch(jacp_wp),
+            "jacr_torch": wp.to_torch(jacr_wp),
+            "point_torch": wp.to_torch(point_wp).view(env.num_envs, 3),
+        }
+        env._racquet_jacobian_cache = cache
+    return cache["jacp_torch"], cache["jacr_torch"], cache["point_torch"]
+
+
+def reset_joints_preserving_racquet_pose(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    asset_cfg: SceneEntityCfg,
+    plate_asset_cfg: SceneEntityCfg,
+    position_range: tuple[float, float],
+    velocity_range: tuple[float, float] = (0.0, 0.0),
+    max_iters: int = 32,
+    damping: float = 0.05,
+    max_dq: float = 0.2,
+    position_weight: float = 1.0,
+    orientation_weight: float = 1.0,
+    posture_weight: float = 0.02,
+    pose_tol: float = 1e-5,
+    rot_tol: float = 1e-4,
+) -> None:
+    """Randomize joint posture while preserving the nominal racquet pose."""
+    del velocity_range  # Reset starts from rest regardless of sampled posture.
+
+    env_ids = _as_env_ids(env, env_ids)
+    if env_ids.numel() == 0:
+        return
+
+    robot: Entity = env.scene[asset_cfg.name]
+    joint_ids = _joint_ids_from_cfg(robot, asset_cfg, env.device)
+    joint_dof_ids = robot.indexing.joint_v_adr[joint_ids]
+
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=plate_asset_cfg,
+        )
+    nominal_pos_w_all, nominal_quat_w_all = env._racquet_nominal_pose_w
+    target_pos_w = nominal_pos_w_all[env_ids]
+    target_quat_w = nominal_quat_w_all[env_ids]
+
+    lower = robot.data.joint_pos_limits[env_ids][:, joint_ids, 0]
+    upper = robot.data.joint_pos_limits[env_ids][:, joint_ids, 1]
+
+    q_full = robot.data.default_joint_pos[env_ids].clone()
+    q_pref = q_full[:, joint_ids] + sample_uniform(
+        position_range[0],
+        position_range[1],
+        (len(env_ids), len(joint_ids)),
+        device=env.device,
+    )
+    q_pref = torch.minimum(torch.maximum(q_pref, lower), upper)
+    q_full[:, joint_ids] = q_pref
+    qd_full = torch.zeros_like(robot.data.default_joint_vel[env_ids])
+
+    robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
+    env.sim.forward()
+
+    body_id = _body_global_id(robot, plate_asset_cfg.body_ids)
+    jacp_torch, jacr_torch, point_torch = _get_racquet_jacobian_buffers(env, body_id)
+
+    lam = max(damping, 1e-6)
+    wp2 = position_weight * position_weight
+    wo2 = orientation_weight * orientation_weight
+    wpost2 = posture_weight * posture_weight
+
+    for _ in range(max_iters):
+        frame_pos_w = env.sim.data.xpos[env_ids, body_id]
+        frame_quat_w = env.sim.data.xquat[env_ids, body_id]
+        pos_error, rot_error = compute_pose_error(
+            frame_pos_w,
+            frame_quat_w,
+            target_pos_w,
+            target_quat_w,
+        )
+
+        if (
+            torch.max(torch.linalg.norm(pos_error, dim=-1)).item() < pose_tol
+            and torch.max(torch.linalg.norm(rot_error, dim=-1)).item() < rot_tol
+        ):
+            break
+
+        point_torch[env_ids] = frame_pos_w
+        with wp.ScopedDevice(env.sim.wp_device):
+            mjwarp.jac(
+                env.sim.wp_model,
+                env.sim.wp_data,
+                env._racquet_jacobian_cache["jacp_wp"],
+                env._racquet_jacobian_cache["jacr_wp"],
+                env._racquet_jacobian_cache["point_wp"],
+                env._racquet_jacobian_cache["body_wp"],
+            )
+
+        jacp = jacp_torch[env_ids][:, :, joint_dof_ids]
+        jacr = jacr_torch[env_ids][:, :, joint_dof_ids]
+
+        q = robot.data.joint_pos[env_ids][:, joint_ids]
+        JTJ = wp2 * torch.einsum("bti,btj->bij", jacp, jacp) + wo2 * torch.einsum(
+            "bti,btj->bij", jacr, jacr
+        )
+        JTdx = wp2 * torch.einsum("bti,bt->bi", jacp, pos_error) + wo2 * torch.einsum(
+            "bti,bt->bi", jacr, rot_error
+        )
+        if posture_weight > 0.0:
+            JTJ.diagonal(dim1=-2, dim2=-1).add_(wpost2)
+            JTdx.add_(wpost2 * (q_pref - q))
+        JTJ.diagonal(dim1=-2, dim2=-1).add_(lam * lam)
+
+        dq = torch.linalg.solve(JTJ, JTdx).clamp(-max_dq, max_dq)
+        q_next = torch.minimum(torch.maximum(q + dq, lower), upper)
+
+        q_full = robot.data.joint_pos[env_ids].clone()
+        q_full[:, joint_ids] = q_next
+        robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
+        env.sim.forward()
+
+    final_q = robot.data.joint_pos[env_ids]
+    final_qd = torch.zeros_like(robot.data.joint_vel[env_ids])
+    robot.write_joint_state_to_sim(final_q, final_qd, env_ids=env_ids)
+    robot.set_joint_position_target(final_q, env_ids=env_ids)
+    robot.set_joint_velocity_target(final_qd, env_ids=env_ids)
 
 
 def body_external_force(

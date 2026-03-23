@@ -402,12 +402,13 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
     ball_ang_vel_range = ball_reset.angular_velocity if spec.randomize_ball_reset else (0.0, 0.0)
     events = {
         "reset_robot_joints": EventTermCfg(
-            func=mdp.reset_joints_by_offset,
+            func=bb_mdp.reset_joints_preserving_racquet_pose,
             mode="reset",
             params={
                 "position_range": joint_reset_range,
                 "velocity_range": (0.0, 0.0),
                 "asset_cfg": robot_joints_cfg(),
+                "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
         "reset_ball": EventTermCfg(
