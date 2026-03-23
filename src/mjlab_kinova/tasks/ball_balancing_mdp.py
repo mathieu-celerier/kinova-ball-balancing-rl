@@ -594,6 +594,22 @@ def _accumulate_profile_stat(
     env._profile_stats[key] = env._profile_stats.get(key, 0.0) + value
 
 
+def _solve_damped_system(
+    matrix: torch.Tensor,
+    rhs: torch.Tensor,
+    base_damping: float,
+    max_tries: int = 5,
+) -> torch.Tensor:
+    eye = torch.eye(matrix.shape[-1], device=matrix.device, dtype=matrix.dtype).unsqueeze(0)
+    damping = max(base_damping, 1e-6)
+    for _ in range(max_tries):
+        try:
+            return torch.linalg.solve(matrix + damping * eye, rhs)
+        except torch.linalg.LinAlgError:
+            damping *= 10.0
+    return torch.linalg.lstsq(matrix + damping * eye, rhs.unsqueeze(-1)).solution.squeeze(-1)
+
+
 def _get_racquet_jacobian_buffers(
     env: "ManagerBasedRlEnv", body_id: int
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
@@ -618,6 +634,303 @@ def _get_racquet_jacobian_buffers(
         }
         env._racquet_jacobian_cache = cache
     return cache["jacp_torch"], cache["jacr_torch"], cache["point_torch"]
+
+
+def _compute_nullspace_direction(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor,
+    body_id: int,
+    joint_dof_ids: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    jacp_torch, jacr_torch, point_torch = _get_racquet_jacobian_buffers(env, body_id)
+    point_torch[env_ids] = env.sim.data.xpos[env_ids, body_id]
+    with wp.ScopedDevice(env.sim.wp_device):
+        mjwarp.jac(
+            env.sim.wp_model,
+            env.sim.wp_data,
+            env._racquet_jacobian_cache["jacp_wp"],
+            env._racquet_jacobian_cache["jacr_wp"],
+            env._racquet_jacobian_cache["point_wp"],
+            env._racquet_jacobian_cache["body_wp"],
+        )
+
+    jacp = jacp_torch[env_ids][:, :, joint_dof_ids]
+    jacr = jacr_torch[env_ids][:, :, joint_dof_ids]
+    jac = torch.cat((jacp, jacr), dim=1)
+    _u, _s, vh = torch.linalg.svd(jac, full_matrices=True)
+    null_dir = vh[:, -1, :]
+    null_dir = null_dir / torch.clamp(torch.linalg.norm(null_dir, dim=-1, keepdim=True), min=1e-6)
+    return jacp, jacr, null_dir
+
+
+def _max_alpha_along_direction(
+    q: torch.Tensor,
+    direction: torch.Tensor,
+    lower: torch.Tensor,
+    upper: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor]:
+    positive_alpha_per_joint = torch.full_like(q, float("inf"))
+    negative_alpha_per_joint = torch.full_like(q, float("inf"))
+    positive_mask = direction > 1e-6
+    negative_mask = direction < -1e-6
+    positive_alpha_per_joint[positive_mask] = ((upper - q)[positive_mask] / direction[positive_mask])
+    positive_alpha_per_joint[negative_mask] = ((lower - q)[negative_mask] / direction[negative_mask])
+    negative_alpha_per_joint[positive_mask] = ((q - lower)[positive_mask] / direction[positive_mask])
+    negative_alpha_per_joint[negative_mask] = ((upper - q)[negative_mask] / (-direction[negative_mask]))
+    max_positive_alpha = torch.min(positive_alpha_per_joint, dim=-1).values
+    max_negative_alpha = torch.min(negative_alpha_per_joint, dim=-1).values
+    return max_positive_alpha, max_negative_alpha
+
+
+def _correct_pose_to_target(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor,
+    robot: Entity,
+    joint_ids: torch.Tensor,
+    joint_dof_ids: torch.Tensor,
+    body_id: int,
+    target_pos_w: torch.Tensor,
+    target_quat_w: torch.Tensor,
+    q_pref: torch.Tensor,
+    qd_full: torch.Tensor,
+    finite_lower: torch.Tensor,
+    finite_upper: torch.Tensor,
+    max_iters: int,
+    damping: float,
+    max_dq: float,
+    position_weight: float,
+    orientation_weight: float,
+    posture_weight: float,
+    pose_tol: float,
+    rot_tol: float,
+) -> torch.Tensor:
+    lam = max(damping, 1e-6)
+    wp2 = position_weight * position_weight
+    wo2 = orientation_weight * orientation_weight
+    wpost2 = posture_weight * posture_weight
+
+    for _ in range(max_iters):
+        frame_pos_w = env.sim.data.xpos[env_ids, body_id]
+        frame_quat_w = env.sim.data.xquat[env_ids, body_id]
+        pos_error, rot_error = compute_pose_error(
+            frame_pos_w,
+            frame_quat_w,
+            target_pos_w,
+            target_quat_w,
+        )
+        if (
+            torch.max(torch.linalg.norm(pos_error, dim=-1)).item() < pose_tol
+            and torch.max(torch.linalg.norm(rot_error, dim=-1)).item() < rot_tol
+        ):
+            break
+
+        jacp, jacr, _null_dir = _compute_nullspace_direction(env, env_ids, body_id, joint_dof_ids)
+        q = robot.data.joint_pos[env_ids][:, joint_ids]
+        JTJ = wp2 * torch.einsum("bti,btj->bij", jacp, jacp) + wo2 * torch.einsum(
+            "bti,btj->bij", jacr, jacr
+        )
+        JTdx = wp2 * torch.einsum("bti,bt->bi", jacp, pos_error) + wo2 * torch.einsum(
+            "bti,bt->bi", jacr, rot_error
+        )
+        if posture_weight > 0.0:
+            JTJ.diagonal(dim1=-2, dim2=-1).add_(wpost2)
+            JTdx.add_(wpost2 * (q_pref - q))
+        JTJ.diagonal(dim1=-2, dim2=-1).add_(lam * lam)
+
+        dq = _solve_damped_system(JTJ, JTdx, base_damping=lam * lam).clamp(-max_dq, max_dq)
+        q_next = torch.minimum(torch.maximum(q + dq, finite_lower), finite_upper)
+        q_full = robot.data.joint_pos[env_ids].clone()
+        q_full[:, joint_ids] = q_next
+        robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
+        env.sim.forward()
+
+    return robot.data.joint_pos[env_ids][:, joint_ids].clone()
+
+
+def _trace_nullspace_branch(
+    env: "ManagerBasedRlEnv",
+    robot: Entity,
+    env_ids: torch.Tensor,
+    joint_ids: torch.Tensor,
+    joint_dof_ids: torch.Tensor,
+    body_id: int,
+    default_q_full: torch.Tensor,
+    qd_full: torch.Tensor,
+    target_pos_w: torch.Tensor,
+    target_quat_w: torch.Tensor,
+    finite_lower: torch.Tensor,
+    finite_upper: torch.Tensor,
+    direction_sign: float,
+    max_iters: int,
+    damping: float,
+    max_dq: float,
+    position_weight: float,
+    orientation_weight: float,
+    posture_weight: float,
+    pose_tol: float,
+    rot_tol: float,
+    step_size: float = 0.15,
+    max_steps: int = 64,
+) -> list[torch.Tensor]:
+    samples: list[torch.Tensor] = []
+    q_current = default_q_full[:, joint_ids].clone()
+    prev_dir: torch.Tensor | None = None
+
+    for _ in range(max_steps):
+        q_full = default_q_full.clone()
+        q_full[:, joint_ids] = q_current
+        robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
+        env.sim.forward()
+
+        _jacp, _jacr, null_dir = _compute_nullspace_direction(env, env_ids, body_id, joint_dof_ids)
+        if prev_dir is not None and torch.sum(null_dir * prev_dir, dim=-1).item() < 0.0:
+            null_dir = -null_dir
+        prev_dir = null_dir.clone()
+
+        max_positive_alpha, max_negative_alpha = _max_alpha_along_direction(
+            q_current, null_dir, finite_lower, finite_upper
+        )
+        travel = max_positive_alpha if direction_sign > 0.0 else max_negative_alpha
+        step_alpha = torch.minimum(
+            travel,
+            torch.full_like(travel, step_size),
+        )
+        if step_alpha[0].item() < 1e-4:
+            break
+
+        q_pref = q_current + direction_sign * step_alpha.unsqueeze(-1) * null_dir
+        q_pref = torch.minimum(torch.maximum(q_pref, finite_lower), finite_upper)
+
+        q_full[:, joint_ids] = q_pref
+        robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
+        env.sim.forward()
+        q_corrected = _correct_pose_to_target(
+            env=env,
+            env_ids=env_ids,
+            robot=robot,
+            joint_ids=joint_ids,
+            joint_dof_ids=joint_dof_ids,
+            body_id=body_id,
+            target_pos_w=target_pos_w,
+            target_quat_w=target_quat_w,
+            q_pref=q_pref,
+            qd_full=qd_full,
+            finite_lower=finite_lower,
+            finite_upper=finite_upper,
+            max_iters=max_iters,
+            damping=damping,
+            max_dq=max_dq,
+            position_weight=position_weight,
+            orientation_weight=orientation_weight,
+            posture_weight=posture_weight,
+            pose_tol=pose_tol,
+            rot_tol=rot_tol,
+        )
+
+        move_norm = torch.linalg.norm(q_corrected - q_current, dim=-1)
+        if move_norm[0].item() < 1e-4:
+            break
+
+        q_current = q_corrected
+        samples.append(q_current.squeeze(0).clone())
+
+    return samples
+
+
+def _get_racquet_nullspace_samples(
+    env: "ManagerBasedRlEnv",
+    robot: Entity,
+    joint_ids: torch.Tensor,
+    joint_dof_ids: torch.Tensor,
+    body_id: int,
+    target_pos_w: torch.Tensor,
+    target_quat_w: torch.Tensor,
+    finite_lower: torch.Tensor,
+    finite_upper: torch.Tensor,
+    max_iters: int,
+    damping: float,
+    max_dq: float,
+    position_weight: float,
+    orientation_weight: float,
+    posture_weight: float,
+    pose_tol: float,
+    rot_tol: float,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    cache_key = (
+        tuple(joint_ids.tolist()),
+        round(max_iters, 6),
+        round(damping, 6),
+        round(max_dq, 6),
+        round(position_weight, 6),
+        round(orientation_weight, 6),
+        round(posture_weight, 6),
+        round(pose_tol, 8),
+        round(rot_tol, 8),
+    )
+    cache = getattr(env, "_racquet_nullspace_samples_cache", None)
+    if cache is not None and cache.get("key") == cache_key:
+        return cache["default_q"], cache["negative"], cache["positive"]
+
+    env_ids = torch.tensor([0], device=env.device, dtype=torch.long)
+    default_q_full = robot.data.default_joint_pos[env_ids].clone()
+    qd_full = torch.zeros_like(robot.data.default_joint_vel[env_ids])
+    default_q = default_q_full[:, joint_ids].clone()
+
+    negative = _trace_nullspace_branch(
+        env,
+        robot,
+        env_ids,
+        joint_ids,
+        joint_dof_ids,
+        body_id,
+        default_q_full,
+        qd_full,
+        target_pos_w[:1],
+        target_quat_w[:1],
+        finite_lower[:1],
+        finite_upper[:1],
+        direction_sign=-1.0,
+        max_iters=max_iters,
+        damping=damping,
+        max_dq=max_dq,
+        position_weight=position_weight,
+        orientation_weight=orientation_weight,
+        posture_weight=posture_weight,
+        pose_tol=pose_tol,
+        rot_tol=rot_tol,
+    )
+    positive = _trace_nullspace_branch(
+        env,
+        robot,
+        env_ids,
+        joint_ids,
+        joint_dof_ids,
+        body_id,
+        default_q_full,
+        qd_full,
+        target_pos_w[:1],
+        target_quat_w[:1],
+        finite_lower[:1],
+        finite_upper[:1],
+        direction_sign=1.0,
+        max_iters=max_iters,
+        damping=damping,
+        max_dq=max_dq,
+        position_weight=position_weight,
+        orientation_weight=orientation_weight,
+        posture_weight=posture_weight,
+        pose_tol=pose_tol,
+        rot_tol=rot_tol,
+    )
+
+    cache = {
+        "key": cache_key,
+        "default_q": default_q.squeeze(0).clone(),
+        "negative": torch.stack(negative) if negative else default_q.squeeze(0)[None].clone(),
+        "positive": torch.stack(positive) if positive else default_q.squeeze(0)[None].clone(),
+    }
+    env._racquet_nullspace_samples_cache = cache
+    return cache["default_q"], cache["negative"], cache["positive"]
 
 
 def reset_joints_preserving_racquet_pose(
@@ -657,86 +970,96 @@ def reset_joints_preserving_racquet_pose(
     target_pos_w = nominal_pos_w_all[env_ids]
     target_quat_w = nominal_quat_w_all[env_ids]
 
-    lower = robot.data.joint_pos_limits[env_ids][:, joint_ids, 0]
-    upper = robot.data.joint_pos_limits[env_ids][:, joint_ids, 1]
+    # Use soft limits for posture sampling and fall back to a finite span for
+    # joints that are unlimited in MuJoCo (stored as +/-inf).
+    lower = robot.data.soft_joint_pos_limits[env_ids][:, joint_ids, 0]
+    upper = robot.data.soft_joint_pos_limits[env_ids][:, joint_ids, 1]
 
     q_full = robot.data.default_joint_pos[env_ids].clone()
-    q_pref = q_full[:, joint_ids] + sample_uniform(
+    qd_full = torch.zeros_like(robot.data.default_joint_vel[env_ids])
+    default_q = q_full[:, joint_ids]
+    finite_lower = torch.where(torch.isfinite(lower), lower, default_q - torch.pi)
+    finite_upper = torch.where(torch.isfinite(upper), upper, default_q + torch.pi)
+
+    body_id = _body_global_id(robot, plate_asset_cfg.body_ids)
+    default_sample_q, negative_samples, positive_samples = _get_racquet_nullspace_samples(
+        env=env,
+        robot=robot,
+        joint_ids=joint_ids,
+        joint_dof_ids=joint_dof_ids,
+        body_id=body_id,
+        target_pos_w=target_pos_w,
+        target_quat_w=target_quat_w,
+        finite_lower=finite_lower,
+        finite_upper=finite_upper,
+        max_iters=max_iters,
+        damping=damping,
+        max_dq=max_dq,
+        position_weight=position_weight,
+        orientation_weight=orientation_weight,
+        posture_weight=posture_weight,
+        pose_tol=pose_tol,
+        rot_tol=rot_tol,
+    )
+
+    alpha_coeff = sample_uniform(
         position_range[0],
         position_range[1],
-        (len(env_ids), len(joint_ids)),
+        (len(env_ids),),
         device=env.device,
-    )
-    q_pref = torch.minimum(torch.maximum(q_pref, lower), upper)
+    ).clamp(-1.0, 1.0)
+    q_pref = default_sample_q.unsqueeze(0).expand(len(env_ids), -1).clone()
+    negative_len = max(int(negative_samples.shape[0]), 1)
+    positive_len = max(int(positive_samples.shape[0]), 1)
+    negative_mask = alpha_coeff < 0.0
+    positive_mask = alpha_coeff > 0.0
+    if torch.any(negative_mask):
+        neg_idx = torch.clamp(
+            torch.round(torch.abs(alpha_coeff[negative_mask]) * (negative_len - 1)).long(),
+            min=0,
+            max=negative_len - 1,
+        )
+        q_pref[negative_mask] = negative_samples[neg_idx]
+    if torch.any(positive_mask):
+        pos_idx = torch.clamp(
+            torch.round(torch.abs(alpha_coeff[positive_mask]) * (positive_len - 1)).long(),
+            min=0,
+            max=positive_len - 1,
+        )
+        q_pref[positive_mask] = positive_samples[pos_idx]
     q_full[:, joint_ids] = q_pref
-    qd_full = torch.zeros_like(robot.data.default_joint_vel[env_ids])
 
     robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
     env.sim.forward()
-
-    body_id = _body_global_id(robot, plate_asset_cfg.body_ids)
-    jacp_torch, jacr_torch, point_torch = _get_racquet_jacobian_buffers(env, body_id)
-
-    lam = max(damping, 1e-6)
-    wp2 = position_weight * position_weight
-    wo2 = orientation_weight * orientation_weight
-    wpost2 = posture_weight * posture_weight
-
-    for _ in range(max_iters):
-        frame_pos_w = env.sim.data.xpos[env_ids, body_id]
-        frame_quat_w = env.sim.data.xquat[env_ids, body_id]
-        pos_error, rot_error = compute_pose_error(
-            frame_pos_w,
-            frame_quat_w,
-            target_pos_w,
-            target_quat_w,
-        )
-
-        if (
-            torch.max(torch.linalg.norm(pos_error, dim=-1)).item() < pose_tol
-            and torch.max(torch.linalg.norm(rot_error, dim=-1)).item() < rot_tol
-        ):
-            break
-
-        point_torch[env_ids] = frame_pos_w
-        with wp.ScopedDevice(env.sim.wp_device):
-            mjwarp.jac(
-                env.sim.wp_model,
-                env.sim.wp_data,
-                env._racquet_jacobian_cache["jacp_wp"],
-                env._racquet_jacobian_cache["jacr_wp"],
-                env._racquet_jacobian_cache["point_wp"],
-                env._racquet_jacobian_cache["body_wp"],
-            )
-
-        jacp = jacp_torch[env_ids][:, :, joint_dof_ids]
-        jacr = jacr_torch[env_ids][:, :, joint_dof_ids]
-
-        q = robot.data.joint_pos[env_ids][:, joint_ids]
-        JTJ = wp2 * torch.einsum("bti,btj->bij", jacp, jacp) + wo2 * torch.einsum(
-            "bti,btj->bij", jacr, jacr
-        )
-        JTdx = wp2 * torch.einsum("bti,bt->bi", jacp, pos_error) + wo2 * torch.einsum(
-            "bti,bt->bi", jacr, rot_error
-        )
-        if posture_weight > 0.0:
-            JTJ.diagonal(dim1=-2, dim2=-1).add_(wpost2)
-            JTdx.add_(wpost2 * (q_pref - q))
-        JTJ.diagonal(dim1=-2, dim2=-1).add_(lam * lam)
-
-        dq = torch.linalg.solve(JTJ, JTdx).clamp(-max_dq, max_dq)
-        q_next = torch.minimum(torch.maximum(q + dq, lower), upper)
-
-        q_full = robot.data.joint_pos[env_ids].clone()
-        q_full[:, joint_ids] = q_next
-        robot.write_joint_state_to_sim(q_full, qd_full, env_ids=env_ids)
-        env.sim.forward()
+    final_q_joint = _correct_pose_to_target(
+        env=env,
+        env_ids=env_ids,
+        robot=robot,
+        joint_ids=joint_ids,
+        joint_dof_ids=joint_dof_ids,
+        body_id=body_id,
+        target_pos_w=target_pos_w,
+        target_quat_w=target_quat_w,
+        q_pref=q_pref,
+        qd_full=qd_full,
+        finite_lower=finite_lower,
+        finite_upper=finite_upper,
+        max_iters=max_iters,
+        damping=damping,
+        max_dq=max_dq,
+        position_weight=position_weight,
+        orientation_weight=orientation_weight,
+        posture_weight=posture_weight,
+        pose_tol=pose_tol,
+        rot_tol=rot_tol,
+    )
 
     final_q = robot.data.joint_pos[env_ids]
     final_qd = torch.zeros_like(robot.data.joint_vel[env_ids])
     robot.write_joint_state_to_sim(final_q, final_qd, env_ids=env_ids)
     robot.set_joint_position_target(final_q, env_ids=env_ids)
     robot.set_joint_velocity_target(final_qd, env_ids=env_ids)
+
     if getattr(env, "_profile_timing", False):
         elapsed = time.perf_counter() - profile_start
         _accumulate_profile_stat(env, "pose_reset_ik_time", elapsed)
