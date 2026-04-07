@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import time
 from typing import TYPE_CHECKING
 from typing import Any, Callable
@@ -21,6 +22,90 @@ from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
+
+
+def _reset_debug_enabled() -> bool:
+    return os.getenv("MJLAB_KINOVA_RESET_DEBUG", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }
+
+
+def _ensure_reset_debug_state(env: "ManagerBasedRlEnv") -> None:
+    if hasattr(env, "_reset_debug_episode_id"):
+        return
+    env._reset_debug_episode_id = torch.zeros(
+        env.num_envs, device=env.device, dtype=torch.long
+    )
+    env._reset_debug_pending = torch.zeros(
+        env.num_envs, device=env.device, dtype=torch.bool
+    )
+
+
+def _format_debug_vec(vec: torch.Tensor, precision: int = 4) -> str:
+    values = vec.detach().reshape(-1).cpu().tolist()
+    return "[" + ", ".join(f"{float(v):.{precision}f}" for v in values) + "]"
+
+
+def mark_reset_debug_pending(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+) -> None:
+    """Track envs whose first post-reset step should be logged."""
+    if not _reset_debug_enabled():
+        return
+    env_ids = _as_env_ids(env, env_ids)
+    if env_ids.numel() == 0:
+        return
+    _ensure_reset_debug_state(env)
+    env._reset_debug_episode_id[env_ids] += 1
+    env._reset_debug_pending[env_ids] = True
+
+
+def log_first_step_after_reset(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+) -> None:
+    """Log the first control step after each reset for debugging."""
+    del env_ids
+    if not _reset_debug_enabled() or not hasattr(env, "_reset_debug_pending"):
+        return
+
+    pending = torch.nonzero(
+        env._reset_debug_pending & (env.episode_length_buf == 1), as_tuple=False
+    ).squeeze(-1)
+    if pending.numel() == 0:
+        return
+
+    robot: Entity = env.scene["robot"]
+    ball: Entity = env.scene["ball"]
+    plate_body_ids, _ = robot.find_bodies("racquet_frame", preserve_order=True)
+    plate_body_id = plate_body_ids[0]
+    plate_pos_w = robot.data.body_link_pos_w[:, plate_body_id]
+    plate_quat_w = robot.data.body_link_quat_w[:, plate_body_id]
+    ball_pos_w = ball.data.root_link_pos_w
+    ball_pos_plate = quat_apply_inverse(plate_quat_w, ball_pos_w - plate_pos_w)
+    joint_term = env.action_manager.get_term("joint_pos")
+    processed_actions = getattr(joint_term, "_processed_actions", None)
+
+    for env_id in pending.tolist():
+        msg = (
+            f"[RESET_DEBUG][FIRST_STEP] env={env_id} "
+            f"episode={int(env._reset_debug_episode_id[env_id].item())} "
+            f"raw_action={_format_debug_vec(env.action_manager.action[env_id])} "
+            f"joint_target={_format_debug_vec(robot.data.joint_pos_target[env_id])} "
+            f"joint_pos={_format_debug_vec(robot.data.joint_pos[env_id])} "
+            f"ball_plate={_format_debug_vec(ball_pos_plate[env_id])}"
+        )
+        if processed_actions is not None:
+            msg += (
+                f" processed_action={_format_debug_vec(processed_actions[env_id])}"
+            )
+        print(msg)
+
+    env._reset_debug_pending[pending] = False
 
 
 def ball_pos_in_plate_frame(
@@ -120,7 +205,11 @@ def ee_ft_wrench(
     torque_sensor = env.scene[torque_sensor_name]
     assert isinstance(force_sensor, BuiltinSensor)
     assert isinstance(torque_sensor, BuiltinSensor)
-    return torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    ft_bias = getattr(env, "_ee_ft_bias", None)
+    if ft_bias is None:
+        return wrench
+    return wrench - ft_bias
 
 
 def joint_torque_l2(
@@ -561,8 +650,11 @@ def _as_env_ids(env: "ManagerBasedRlEnv", env_ids: torch.Tensor | None) -> torch
 
 
 def _body_global_id(
-    robot: Entity, body_ids: torch.Tensor | list[int] | tuple[int, ...]
+    robot: Entity, body_ids: torch.Tensor | list[int] | tuple[int, ...] | slice
 ) -> int:
+    if isinstance(body_ids, slice):
+        local_body_id = 0
+        return int(robot.indexing.body_ids[local_body_id].item())
     local_body_id = int(
         torch.as_tensor(body_ids, device=robot.data.body_link_pos_w.device)
         .flatten()[0]
@@ -574,6 +666,8 @@ def _body_global_id(
 def _joint_ids_from_cfg(
     robot: Entity, asset_cfg: SceneEntityCfg, device: torch.device
 ) -> torch.Tensor:
+    if isinstance(asset_cfg.joint_ids, slice):
+        return torch.arange(robot.num_joints, device=device, dtype=torch.long)
     if asset_cfg.joint_ids is not None:
         return torch.as_tensor(asset_cfg.joint_ids, device=device, dtype=torch.long)
     if asset_cfg.joint_names is None:
@@ -1060,6 +1154,16 @@ def reset_joints_preserving_racquet_pose(
     robot.set_joint_position_target(final_q, env_ids=env_ids)
     robot.set_joint_velocity_target(final_qd, env_ids=env_ids)
 
+    if _reset_debug_enabled():
+        _ensure_reset_debug_state(env)
+        for idx, env_id in enumerate(env_ids.tolist()):
+            print(
+                "[RESET_DEBUG][JOINT_RESET] "
+                f"env={env_id} "
+                f"episode={int(env._reset_debug_episode_id[env_id].item()) + 1} "
+                f"joint_pos={_format_debug_vec(final_q[idx])}"
+            )
+
     if getattr(env, "_profile_timing", False):
         elapsed = time.perf_counter() - profile_start
         _accumulate_profile_stat(env, "pose_reset_ik_time", elapsed)
@@ -1082,6 +1186,30 @@ def body_external_force_norm(
     """Return the norm of the external force applied to a selected body."""
     force = body_external_force(env, asset_cfg)
     return torch.linalg.norm(force, dim=-1)
+
+
+def reset_ee_ft_bias(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    force_sensor_name: str = "robot/EEForceSensor_fsensor",
+    torque_sensor_name: str = "robot/EEForceSensor_tsensor",
+) -> None:
+    """Capture the current end-effector F/T reading as the zero reference."""
+    env_ids = _as_env_ids(env, env_ids)
+    if env_ids.numel() == 0:
+        return
+
+    env.sim.forward()
+    force_sensor = env.scene[force_sensor_name]
+    torque_sensor = env.scene[torque_sensor_name]
+    assert isinstance(force_sensor, BuiltinSensor)
+    assert isinstance(torque_sensor, BuiltinSensor)
+    # Capture the raw sensor reading here. Using ee_ft_wrench() would subtract the
+    # previous bias and make the stored bias alternate across resets.
+    wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    if not hasattr(env, "_ee_ft_bias"):
+        env._ee_ft_bias = torch.zeros_like(wrench)
+    env._ee_ft_bias[env_ids] = wrench[env_ids]
 
 
 def reset_ball_on_plate(
@@ -1172,6 +1300,20 @@ def reset_ball_on_plate(
 
     ball.write_root_link_pose_to_sim(pose, env_ids=env_ids)
     ball.write_root_link_velocity_to_sim(vel, env_ids=env_ids)
+    mark_reset_debug_pending(env, env_ids)
+
+    if _reset_debug_enabled():
+        env.sim.forward()
+        ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
+        ball_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
+        for env_id in env_ids.tolist():
+            print(
+                "[RESET_DEBUG][BALL_RESET] "
+                f"env={env_id} "
+                f"episode={int(env._reset_debug_episode_id[env_id].item())} "
+                f"ball_plate={_format_debug_vec(ball_pos_plate[env_id])} "
+                f"ball_vel_plate={_format_debug_vec(ball_vel_plate[env_id])}"
+            )
 
 
 def kick_ball_velocity(

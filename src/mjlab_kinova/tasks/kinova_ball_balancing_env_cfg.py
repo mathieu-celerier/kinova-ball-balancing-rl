@@ -412,6 +412,10 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
                 "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
+        "reset_ee_ft_bias": EventTermCfg(
+            func=bb_mdp.reset_ee_ft_bias,
+            mode="reset",
+        ),
         "reset_ball": EventTermCfg(
             func=bb_mdp.reset_ball_on_plate,
             mode="reset",
@@ -427,6 +431,10 @@ def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[st
                 "lin_vel_z_range": ball_lin_vel_z_range,
                 "ang_vel_range": ball_ang_vel_range,
             },
+        ),
+        "log_first_step_after_reset": EventTermCfg(
+            func=bb_mdp.log_first_step_after_reset,
+            mode="step",
         ),
     }
 
