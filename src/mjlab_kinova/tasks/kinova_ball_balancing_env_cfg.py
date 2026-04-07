@@ -28,7 +28,9 @@ from . import ball_balancing_mdp as bb_mdp
 from .policy_actions import InitialFramePositionActionCfg
 from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
-PolicyVariant = Literal["baseline", "cartesian", "baseline_no_model_rand", "baseline_no_rand"]
+PolicyVariant = Literal[
+    "baseline", "cartesian", "baseline_no_model_rand", "baseline_no_rand"
+]
 
 
 def robot_joints_cfg() -> SceneEntityCfg:
@@ -117,9 +119,9 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         use_observation_noise=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
-        randomize_pd_gains=True,
+        randomize_pd_gains=False,
         randomize_robot_model=False,
-        randomize_null_space_init=True,
+        randomize_null_space_init=False,
         use_ball_kick=True,
     ),
     "baseline_no_rand": PolicySpec(
@@ -292,8 +294,12 @@ def kinova_ppo_runner_cfg(
     )
 
 
-def _actor_observation_terms(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[str, ObservationTermCfg]:
-    actor_terms = _shared_observation_terms(use_noise=spec.use_observation_noise and not play, params=params)
+def _actor_observation_terms(
+    spec: PolicySpec, play: bool, params: TaskParameters
+) -> dict[str, ObservationTermCfg]:
+    actor_terms = _shared_observation_terms(
+        use_noise=spec.use_observation_noise and not play, params=params
+    )
     return {name: actor_terms[name] for name in spec.actor_terms}
 
 
@@ -326,7 +332,9 @@ def _noise_cfg(use_noise: bool, noise_range) -> Unoise | None:
     return Unoise(n_min=noise_range.min, n_max=noise_range.max)
 
 
-def _shared_observation_terms(use_noise: bool, params: TaskParameters) -> dict[str, ObservationTermCfg]:
+def _shared_observation_terms(
+    use_noise: bool, params: TaskParameters
+) -> dict[str, ObservationTermCfg]:
     noise = params.observation_noise
     joint_pos_noise = _noise_cfg(use_noise, noise.joint_pos)
     joint_vel_noise = _noise_cfg(use_noise, noise.joint_vel)
@@ -390,17 +398,29 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
     }
 
 
-def _events_cfg(spec: PolicySpec, play: bool, params: TaskParameters) -> dict[str, EventTermCfg]:
+def _events_cfg(
+    spec: PolicySpec, play: bool, params: TaskParameters
+) -> dict[str, EventTermCfg]:
     randomization = params.randomization
     ball_reset = params.ball_reset
     joint_reset_range = (
-        randomization.null_space_joint_offset if spec.randomize_null_space_init else (0.0, 0.0)
+        randomization.null_space_joint_offset
+        if spec.randomize_null_space_init
+        else (0.0, 0.0)
     )
     ball_xy_range = ball_reset.xy_range if spec.randomize_ball_reset else (0.0, 0.0)
-    ball_lin_vel_x_range = ball_reset.linear_velocity.x if spec.randomize_ball_reset else (0.0, 0.0)
-    ball_lin_vel_y_range = ball_reset.linear_velocity.y if spec.randomize_ball_reset else (0.0, 0.0)
-    ball_lin_vel_z_range = ball_reset.linear_velocity.z if spec.randomize_ball_reset else (0.0, 0.0)
-    ball_ang_vel_range = ball_reset.angular_velocity if spec.randomize_ball_reset else (0.0, 0.0)
+    ball_lin_vel_x_range = (
+        ball_reset.linear_velocity.x if spec.randomize_ball_reset else (0.0, 0.0)
+    )
+    ball_lin_vel_y_range = (
+        ball_reset.linear_velocity.y if spec.randomize_ball_reset else (0.0, 0.0)
+    )
+    ball_lin_vel_z_range = (
+        ball_reset.linear_velocity.z if spec.randomize_ball_reset else (0.0, 0.0)
+    )
+    ball_ang_vel_range = (
+        ball_reset.angular_velocity if spec.randomize_ball_reset else (0.0, 0.0)
+    )
     events = {
         "reset_robot_joints": EventTermCfg(
             func=bb_mdp.reset_joints_preserving_racquet_pose,
