@@ -32,7 +32,7 @@ src = ["src"]  # Helpful for recognizing first-party imports.
 indent-width = 4
 
 [tool.uv.sources]
-mjlab = { path = "../mjlab/" }
+mjlab = { path = "../mjlab/", editable = true }
 
 [tool.pyright]
 venvPath = "."
