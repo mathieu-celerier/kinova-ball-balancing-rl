@@ -76,6 +76,7 @@ class PolicySpec:
     action_kind: Literal["joint", "cartesian"]
     actor_terms: tuple[str, ...]
     use_observation_noise: bool
+    reset_ee_ft_bias: bool
     randomize_ball_reset: bool
     randomize_ball_properties: bool
     randomize_pd_gains: bool
@@ -91,6 +92,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         action_kind="joint",
         actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
         use_observation_noise=True,
+        reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=True,
@@ -104,6 +106,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         action_kind="cartesian",
         actor_terms=("ee_pos", "ee_vel", "ee_ft_wrench"),
         use_observation_noise=True,
+        reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=True,
@@ -117,6 +120,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         action_kind="joint",
         actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
         use_observation_noise=True,
+        reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=False,
@@ -130,6 +134,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         action_kind="joint",
         actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
         use_observation_noise=False,
+        reset_ee_ft_bias=True,
         randomize_ball_reset=False,
         randomize_ball_properties=False,
         randomize_pd_gains=False,
@@ -287,7 +292,7 @@ def kinova_ppo_runner_cfg(
             max_grad_norm=ppo.max_grad_norm,
         ),
         experiment_name=POLICY_SPECS[variant].experiment_name,
-        logger="tensorboard",
+        logger="wandb",
         save_interval=ppo.save_interval,
         num_steps_per_env=ppo.num_steps_per_env,
         max_iterations=ppo.max_iterations,
@@ -465,6 +470,12 @@ def _events_cfg(
             mode="step",
         ),
     }
+
+    if spec.reset_ee_ft_bias:
+        events["reset_ee_ft_bias"] = EventTermCfg(
+            func=bb_mdp.reset_ee_ft_bias,
+            mode="reset",
+        )
 
     if spec.randomize_ball_properties:
         events["randomize_ball_mass"] = EventTermCfg(

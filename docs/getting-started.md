@@ -33,10 +33,10 @@ All other `uv` arguments continue to use the normal `uv` shell completion.
 uv run train Mjlab-BallBalancing-Kinova --env.scene.num-envs 512
 ```
 
-Kinova training defaults to TensorBoard logging. To opt back into Weights & Biases for a run:
+Kinova training defaults to Weights & Biases when it is configured in your shell. If W&B is not set up, training falls back to TensorBoard automatically.
 
 ```bash
-uv run train Mjlab-BallBalancing-Kinova --agent.logger wandb
+uv run train Mjlab-BallBalancing-Kinova
 ```
 
 Other variants:
