@@ -432,6 +432,14 @@ def _events_cfg(
                 "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
+        "clear_ball_for_ee_ft_bias_reset": EventTermCfg(
+            func=bb_mdp.clear_ball_for_ee_ft_bias_reset,
+            mode="reset",
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+            },
+        ),
         "reset_ee_ft_bias": EventTermCfg(
             func=bb_mdp.reset_ee_ft_bias,
             mode="reset",
