@@ -183,7 +183,7 @@ class PpoParameters:
     max_grad_norm: float = 1.0
     save_interval: int = 200
     num_steps_per_env: int = 24
-    max_iterations: int = 10_000
+    max_iterations: int = 30_000
 
 
 @dataclass(frozen=True)
