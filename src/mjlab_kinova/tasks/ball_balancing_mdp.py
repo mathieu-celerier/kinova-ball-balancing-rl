@@ -541,6 +541,21 @@ class contact_phase_reward(ManagerTermBase):
             self.num_envs, device=self.device, dtype=torch.bool
         )
 
+    def _resolve_nested_term_kwargs(self, value: Any) -> Any:
+        if isinstance(value, SceneEntityCfg):
+            value.resolve(self._env.scene)
+            return value
+        if isinstance(value, dict):
+            return {
+                key: self._resolve_nested_term_kwargs(sub_value)
+                for key, sub_value in value.items()
+            }
+        if isinstance(value, list):
+            return [self._resolve_nested_term_kwargs(sub_value) for sub_value in value]
+        if isinstance(value, tuple):
+            return tuple(self._resolve_nested_term_kwargs(sub_value) for sub_value in value)
+        return value
+
     def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
         if env_ids is None:
             env_ids = slice(None)
@@ -565,7 +580,8 @@ class contact_phase_reward(ManagerTermBase):
         has_contact = no_contact == 0.0
         self._has_seen_contact |= has_contact
 
-        base_reward = term_func(env, **(term_kwargs or {}))
+        resolved_term_kwargs = self._resolve_nested_term_kwargs(term_kwargs or {})
+        base_reward = term_func(env, **resolved_term_kwargs)
         if base_reward.ndim > 1:
             base_reward = base_reward.reshape(base_reward.shape[0], -1).sum(dim=-1)
         phase_mask = (
