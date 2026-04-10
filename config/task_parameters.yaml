@@ -7,6 +7,8 @@ ball:
   solimp: [0.95, 0.995, 0.001, 0.5, 2.0]
   rgba: [0.9, 0.2, 0.2, 1.0]
 
+observation_history_length: 5
+
 observation_noise:
   joint_pos: { min: -0.01, max: 0.01 }
   joint_vel: { min: -0.1, max: 0.1 }

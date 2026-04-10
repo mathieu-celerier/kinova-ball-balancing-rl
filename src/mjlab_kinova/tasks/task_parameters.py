@@ -188,6 +188,7 @@ class PpoParameters:
 @dataclass(frozen=True)
 class TaskParameters:
     ball: BallParameters = field(default_factory=BallParameters)
+    observation_history_length: int = 5
     observation_noise: ObservationNoiseParameters = field(default_factory=ObservationNoiseParameters)
     joint_action: JointActionParameters = field(default_factory=JointActionParameters)
     cartesian_action: CartesianActionParameters = field(default_factory=CartesianActionParameters)

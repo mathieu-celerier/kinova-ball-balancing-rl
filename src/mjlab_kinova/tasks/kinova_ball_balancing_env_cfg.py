@@ -329,7 +329,11 @@ def _actor_observation_terms(
     actor_terms = _shared_observation_terms(
         use_noise=spec.use_observation_noise and not play, params=params
     )
-    return {name: actor_terms[name] for name in spec.actor_terms}
+    selected_terms = {name: actor_terms[name] for name in spec.actor_terms}
+    return _with_observation_history(
+        selected_terms,
+        history_length=params.observation_history_length,
+    )
 
 
 def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTermCfg]:
@@ -352,7 +356,28 @@ def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTe
             ),
         }
     )
-    return terms
+    return _with_observation_history(terms, history_length=params.observation_history_length)
+
+
+def _with_observation_history(
+    observation_terms: dict[str, ObservationTermCfg],
+    history_length: int,
+) -> dict[str, ObservationTermCfg]:
+    if history_length <= 1:
+        return observation_terms
+
+    wrapped_terms: dict[str, ObservationTermCfg] = {}
+    for name, term_cfg in observation_terms.items():
+        wrapped_terms[name] = ObservationTermCfg(
+            func=bb_mdp.observation_history,
+            params={
+                "term_func": term_cfg.func,
+                "term_kwargs": term_cfg.params,
+                "history_length": history_length,
+            },
+            noise=term_cfg.noise,
+        )
+    return wrapped_terms
 
 
 def _noise_cfg(use_noise: bool, noise_range) -> Unoise | None:

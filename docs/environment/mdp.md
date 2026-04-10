@@ -13,6 +13,8 @@ The environment is assembled in `kinova_ball_balancing_env_cfg.py` and task-loca
 
 The task uses asymmetric actor-critic observations.
 
+All observation terms are stacked with a 5-timestep history window.
+
 ### Actor Observations
 
 Baseline:
