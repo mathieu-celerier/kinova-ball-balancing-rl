@@ -587,7 +587,9 @@ class observation_history(ManagerTermBase):
         self._history: torch.Tensor | None = None
 
         term_func = self.params["term_func"]
-        term_kwargs = dict(self.params.get("term_kwargs") or {})
+        term_kwargs = self._resolve_nested_term_kwargs(
+            self.params.get("term_kwargs") or {}
+        )
         if isinstance(term_func, type) and issubclass(term_func, ManagerTermBase):
             wrapped_cfg = SimpleNamespace(params=term_kwargs)
             self._term = term_func(wrapped_cfg, env)
@@ -596,6 +598,21 @@ class observation_history(ManagerTermBase):
             self._term = term_func
             self._term_is_manager = False
         self._term_kwargs = term_kwargs
+
+    def _resolve_nested_term_kwargs(self, value: Any) -> Any:
+        if isinstance(value, SceneEntityCfg):
+            value.resolve(self._env.scene)
+            return value
+        if isinstance(value, dict):
+            return {
+                key: self._resolve_nested_term_kwargs(sub_value)
+                for key, sub_value in value.items()
+            }
+        if isinstance(value, list):
+            return [self._resolve_nested_term_kwargs(sub_value) for sub_value in value]
+        if isinstance(value, tuple):
+            return tuple(self._resolve_nested_term_kwargs(sub_value) for sub_value in value)
+        return value
 
     def _ensure_history(self, obs: torch.Tensor) -> torch.Tensor:
         if obs.ndim == 1:
