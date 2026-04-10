@@ -737,14 +737,14 @@ def racquet_ori_dist_from_initial_l2(
 
     _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
     plate_quat_w = body_orientation_w(env, plate_asset_cfg)
-    zero_pos = torch.zeros((plate_quat_w.shape[0], 3), device=env.device, dtype=plate_quat_w.dtype)
-    _, rot_error = compute_pose_error(
-        zero_pos,
-        plate_quat_w,
-        zero_pos,
-        nominal_quat_w,
-    )
-    return torch.sum(torch.square(rot_error), dim=-1)
+    plate_quat_w = plate_quat_w / torch.linalg.norm(
+        plate_quat_w, dim=-1, keepdim=True
+    ).clamp(min=1.0e-8)
+    nominal_quat_w = nominal_quat_w / torch.linalg.norm(
+        nominal_quat_w, dim=-1, keepdim=True
+    ).clamp(min=1.0e-8)
+    alignment = torch.sum(plate_quat_w * nominal_quat_w, dim=-1).abs().clamp(max=1.0)
+    return 1.0 - torch.square(alignment)
 
 
 def _compute_nominal_racquet_pos_w(
