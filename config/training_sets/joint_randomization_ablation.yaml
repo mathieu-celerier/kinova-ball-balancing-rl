@@ -1,0 +1,72 @@
+variant: joint
+base_config: ../task_parameters.yaml
+default_stop_policy:
+  min_iterations: 5000
+  max_iterations: 10000
+  combine: all
+  criteria:
+    - metric: Train/mean_episode_length
+      threshold: 900.0
+      mode: max
+      window: 10
+      patience: 10
+    - metric: Episode_Termination/ball_fell_off
+      threshold: 1
+      mode: min
+      window: 10
+      patience: 10
+global_overrides:
+  ppo:
+    max_iterations: 30000
+runs:
+  - name: no_rand
+    presets: [zero_ball_reset_velocity, no_rand]
+    overrides: {}
+
+  - name: obs_noise_only
+    presets: [zero_ball_reset_velocity, obs_noise_only]
+    overrides: {}
+
+  - name: ball_reset_only
+    presets: [zero_ball_reset_velocity, ball_reset_only]
+    overrides: {}
+
+  - name: ball_reset_linear_velocity_only
+    presets: [ball_reset_linear_velocity_only]
+    overrides: {}
+
+  - name: ball_reset_angular_velocity_only
+    presets: [ball_reset_angular_velocity_only]
+    overrides: {}
+
+  - name: ball_properties_only
+    presets: [zero_ball_reset_velocity, ball_properties_only]
+    overrides: {}
+
+  - name: pd_gains_only
+    presets: [zero_ball_reset_velocity, pd_gains_only]
+    overrides: {}
+
+  - name: robot_model_only
+    presets: [zero_ball_reset_velocity, robot_model_only]
+    overrides: {}
+
+  - name: null_space_only
+    presets: [zero_ball_reset_velocity, null_space_only]
+    overrides: {}
+
+  - name: no_model_rand
+    presets: [zero_ball_reset_velocity, no_model_rand]
+    overrides: {}
+
+  - name: all_except_null_space_and_robot_model
+    presets: [zero_ball_reset_velocity, all_except_null_space_and_robot_model]
+    overrides: {}
+
+  - name: all_except_robot_model
+    presets: [zero_ball_reset_velocity, all_except_robot_model]
+    overrides: {}
+
+  - name: all_randomization
+    presets: [zero_ball_reset_velocity, all_randomization]
+    overrides: {}

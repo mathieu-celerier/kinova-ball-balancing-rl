@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import os
 import time
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from typing import Any, Callable
 
@@ -590,81 +589,6 @@ class contact_phase_reward(ManagerTermBase):
             else ~self._has_seen_contact
         )
         return base_reward * phase_mask.float()
-
-
-class observation_history(ManagerTermBase):
-    """Stack a fixed recent timestep window for an arbitrary observation term."""
-
-    def __init__(self, cfg, env: "ManagerBasedRlEnv"):
-        super().__init__(env)
-        self.params = cfg.params
-        history_length = int(self.params.get("history_length", 1))
-        self._history_length = max(history_length, 1)
-        self._history: torch.Tensor | None = None
-
-        term_func = self.params["term_func"]
-        term_kwargs = self._resolve_nested_term_kwargs(
-            self.params.get("term_kwargs") or {}
-        )
-        if isinstance(term_func, type) and issubclass(term_func, ManagerTermBase):
-            wrapped_cfg = SimpleNamespace(params=term_kwargs)
-            self._term = term_func(wrapped_cfg, env)
-            self._term_is_manager = True
-        else:
-            self._term = term_func
-            self._term_is_manager = False
-        self._term_kwargs = term_kwargs
-
-    def _resolve_nested_term_kwargs(self, value: Any) -> Any:
-        if isinstance(value, SceneEntityCfg):
-            value.resolve(self._env.scene)
-            return value
-        if isinstance(value, dict):
-            return {
-                key: self._resolve_nested_term_kwargs(sub_value)
-                for key, sub_value in value.items()
-            }
-        if isinstance(value, list):
-            return [self._resolve_nested_term_kwargs(sub_value) for sub_value in value]
-        if isinstance(value, tuple):
-            return tuple(self._resolve_nested_term_kwargs(sub_value) for sub_value in value)
-        return value
-
-    def _ensure_history(self, obs: torch.Tensor) -> torch.Tensor:
-        if obs.ndim == 1:
-            obs = obs.unsqueeze(-1)
-        else:
-            obs = obs.reshape(obs.shape[0], -1)
-
-        if self._history is None or self._history.shape[-1] != obs.shape[-1]:
-            self._history = torch.zeros(
-                self.num_envs,
-                self._history_length,
-                obs.shape[-1],
-                device=self.device,
-                dtype=obs.dtype,
-            )
-        return obs
-
-    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-        if env_ids is None:
-            env_ids = slice(None)
-        if self._history is not None:
-            self._history[env_ids] = 0.0
-        if self._term_is_manager:
-            self._term.reset(env_ids=env_ids)
-
-    def __call__(self, env: "ManagerBasedRlEnv", **_kwargs) -> torch.Tensor:
-        if self._term_is_manager:
-            obs = self._term(env, **self._term_kwargs)
-        else:
-            obs = self._term(env, **self._term_kwargs)
-        obs = self._ensure_history(obs)
-
-        assert self._history is not None
-        self._history = torch.roll(self._history, shifts=-1, dims=1)
-        self._history[:, -1, :] = obs
-        return self._history.reshape(self.num_envs, -1)
 
 
 def ball_no_contact_xy_proxy(

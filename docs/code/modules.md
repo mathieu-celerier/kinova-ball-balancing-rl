@@ -2,13 +2,13 @@
 
 ## `src/mjlab_kinova/tasks/__init__.py`
 
-Registers the environment variants through MjLab's task registry.
+Registers the canonical control-space variants through MjLab's task registry, plus a few compatibility aliases backed by presets.
 
 ## `src/mjlab_kinova/tasks/kinova_ball_balancing_env_cfg.py`
 
 Defines:
 
-- policy variants
+- control-space variants
 - observations
 - actions
 - events
@@ -40,7 +40,7 @@ Its main role is to reinterpret policy outputs as end-effector position offsets 
 
 ## `src/mjlab_kinova/tasks/task_parameters.py`
 
-Centralizes the tunable task and PPO parameters.
+Centralizes the tunable task, training-behavior, and PPO parameters.
 
 This is the best place to start if you want to change:
 
@@ -52,6 +52,8 @@ This is the best place to start if you want to change:
 - PPO hyperparameters.
 
 The default values are also exposed as YAML in `config/task_parameters.yaml`.
+
+Layered overrides from preset files and training-set launches are merged through the same module.
 
 ## `src/mjlab_kinova/robot/kinova_constants.py`
 

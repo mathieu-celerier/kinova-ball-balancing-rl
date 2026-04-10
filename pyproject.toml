@@ -27,6 +27,10 @@ docs = [
 [project.entry-points."mjlab.tasks"]
 mjlab_kinova = "mjlab_kinova.tasks"
 
+[project.scripts]
+kinova-train-set = "mjlab_kinova.train_set:main"
+kinova-train-set-duration = "mjlab_kinova.train_set_duration:main"
+
 [tool.ruff]
 src = ["src"]  # Helpful for recognizing first-party imports.
 indent-width = 4

@@ -1,0 +1,15 @@
+training:
+  use_observation_noise: false
+  randomize_ball_reset: true
+  randomize_ball_properties: false
+  randomize_pd_gains: false
+  randomize_robot_model: false
+  randomize_null_space_init: false
+  use_ball_kick: false
+
+ball_reset:
+  linear_velocity:
+    x: [-0.25, 0.25]
+    y: [-0.25, 0.25]
+    z: [-0.05, 0.05]
+  angular_velocity: [0.0, 0.0]

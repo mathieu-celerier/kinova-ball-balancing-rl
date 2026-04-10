@@ -13,11 +13,13 @@ The environment is assembled in `kinova_ball_balancing_env_cfg.py` and task-loca
 
 The task uses asymmetric actor-critic observations.
 
-All observation terms are stacked with a 5-timestep history window.
+All observation terms are stacked with a 5-step history window at the policy rate, not the raw MuJoCo substep rate.
+
+With `timestep = 0.002 s` and `decimation = 5`, each history entry is separated by the effective policy step of `0.01 s`, so a history length of `5` spans `0.05 s`.
 
 ### Actor Observations
 
-Baseline:
+Joint:
 
 - relative joint positions
 - relative joint velocities
@@ -58,9 +60,9 @@ Training noise is injected into actor observations:
 
 ## Actions
 
-### Joint-Space Baseline
+### Joint-Space Variant
 
-The baseline uses `JointPositionActionCfg` over all joints with:
+The joint-space variant uses `JointPositionActionCfg` over all joints with:
 
 - scale `0.13`
 - default offsets enabled
@@ -169,7 +171,7 @@ For this task, the most informative trends are usually:
 
 ## Reset and Randomization
 
-Per-episode reset/randomization includes:
+The default training behavior for the joint-space variant includes:
 
 - ball XY reset in `[-0.02, 0.02] m`
 - ball Z offset `0.05 m`
@@ -179,3 +181,5 @@ Per-episode reset/randomization includes:
 - robot inertial randomization in `[0.9, 1.1]` for selected fields
 
 During training only, the ball also receives interval velocity kicks every `0.4-1.0 s`.
+
+Alternative joint-space ablations such as "no model randomization" and "no randomization" are now expressed as training presets rather than separate policy variants.

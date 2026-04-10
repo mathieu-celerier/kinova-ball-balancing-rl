@@ -1,0 +1,8 @@
+training:
+  use_observation_noise: true
+  randomize_ball_reset: true
+  randomize_ball_properties: true
+  randomize_pd_gains: true
+  randomize_robot_model: false
+  randomize_null_space_init: false
+  use_ball_kick: true

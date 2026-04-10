@@ -39,11 +39,53 @@ Kinova training defaults to Weights & Biases when it is configured in your shell
 uv run train Mjlab-BallBalancing-Kinova
 ```
 
-Other variants:
+Canonical variants:
 
 ```bash
-uv run train Mjlab-BallBalancing-Kinova-Baseline --env.scene.num-envs 512
+uv run train Mjlab-BallBalancing-Kinova --env.scene.num-envs 512
 uv run train Mjlab-BallBalancing-Kinova-Cartesian --env.scene.num-envs 512
+```
+
+Batch runs for one variant are defined under `config/training_sets/` and launched with:
+
+```bash
+uv run kinova-train-set config/training_sets/joint_ablation.yaml -- --env.scene.num-envs 512
+```
+
+To estimate per-run and whole-set min/max duration bounds without launching training:
+
+```bash
+uv run kinova-train-set-duration config/training_sets/joint_randomization_ablation.yaml
+```
+
+You can also provide an aggregate throughput estimate to convert environment steps into approximate wall-clock time:
+
+```bash
+uv run kinova-train-set-duration config/training_sets/joint_randomization_ablation.yaml \
+  --env-steps-per-second 250000
+```
+
+That launcher merges:
+
+- the base task parameters,
+- zero or more preset YAMLs from `config/presets/`,
+- per-run overrides from the training-set file.
+
+For W&B-backed launches from `kinova-train-set`:
+
+- the training-set file stem becomes the W&B project name
+- the YAML `runs[].name` becomes the run display name
+- a W&B-compatible run ID is derived from `runs[].name`
+
+Any arguments after `--` are forwarded to the underlying `train` command for every run in the set. This is the easiest way to apply a common CLI override such as:
+
+```bash
+uv run kinova-train-set config/training_sets/joint_randomization_ablation.yaml -- --env.scene.num-envs 512
+```
+
+Legacy aliases still exist for compatibility:
+
+```bash
 uv run train Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand --env.scene.num-envs 512
 uv run train Mjlab-BallBalancing-Kinova-BaselineNoRand --env.scene.num-envs 512
 ```
@@ -52,7 +94,7 @@ uv run train Mjlab-BallBalancing-Kinova-BaselineNoRand --env.scene.num-envs 512
 
 ```bash
 uv run play Mjlab-BallBalancing-Kinova \
-  --checkpoint-file logs/rsl_rl/kinova_ball_balancing_baseline/.../model_*.pt
+  --checkpoint-file logs/rsl_rl/kinova_ball_balancing_joint/.../model_*.pt
 ```
 
 ## GPU Fallback
@@ -97,17 +139,25 @@ The default YAML file is:
 
 - `config/task_parameters.yaml`
 
+Preset YAMLs live in:
+
+- `config/presets/`
+
+Training-set batch definitions live in:
+
+- `config/training_sets/`
+
 The registered tasks now load that YAML automatically at import time. To point the task registry to a different file, set:
 
 ```bash
 export MJLAB_KINOVA_TASK_PARAMS=/path/to/task_parameters.yaml
 ```
 
-The repository also includes a small initial sweep under `config/sweeps/`.
+The repository also includes reusable presets under `config/presets/` and example batch experiment sets under `config/training_sets/`.
 
-Those sweep configs are set up as medium runs with `ppo.max_iterations: 3000`.
+The migrated experiment presets such as `nominal`, `high_damping`, `high_disturbance`, `contact_focus`, and `stable_ppo` are set up as medium runs with `ppo.max_iterations: 3000`.
 
-That file is the easiest place to tune:
+Those files are the easiest place to tune:
 
 - ball properties,
 - observation noise,
@@ -128,9 +178,88 @@ from mjlab_kinova.tasks.task_parameters import load_task_parameters
 
 params = load_task_parameters("config/task_parameters.yaml")
 
-env_cfg = kinova_ball_balancing_env_cfg(variant="baseline", params=params)
-rl_cfg = kinova_ppo_runner_cfg(variant="baseline", params=params)
+env_cfg = kinova_ball_balancing_env_cfg(variant="joint", params=params)
+rl_cfg = kinova_ppo_runner_cfg(variant="joint", params=params)
 ```
+
+A training set file has the shape:
+
+```yaml
+variant: joint
+global_overrides:
+  ppo:
+    max_iterations: 30000
+runs:
+  - name: default
+    presets: []
+    overrides: {}
+
+  - name: no_model_rand
+    presets: [no_model_rand]
+    overrides: {}
+```
+
+`global_overrides` applies to every run in the set after the base config is loaded and before presets or per-run overrides are merged.
+
+Each training set can declare a default stop policy, and each run can override it:
+
+```yaml
+variant: joint
+default_stop_policy:
+  min_iterations: 500
+  max_iterations: 3000
+  combine: all
+  criteria:
+    - metric: Train/mean_episode_length
+      threshold: 900.0
+      mode: max
+      window: 5
+      patience: 3
+    - metric: Train/mean_reward
+      threshold: 8.0
+      mode: max
+      window: 5
+      patience: 3
+
+runs:
+  - name: all_randomization
+    presets: [all_randomization]
+    overrides: {}
+    stop_policy:
+      min_iterations: 1000
+      max_iterations: 4000
+      combine: any
+      criteria:
+        - metric: Train/mean_episode_length
+          threshold: 950.0
+          mode: max
+          window: 5
+          patience: 2
+        - metric: Train/mean_reward
+          threshold: 10.0
+          mode: max
+          window: 8
+          patience: 2
+```
+
+Supported stop-policy fields are:
+
+- `min_iterations`: earliest training iteration at which convergence stopping is allowed
+- `max_iterations`: hard cap for that run, even if convergence criteria never trigger
+- `combine`: `all` or `any` across the listed criteria
+- `criteria`: list of metric thresholds to evaluate
+
+Each criterion supports:
+
+- `metric`: metric name produced by the runner, for example `Train/mean_reward`, `Train/mean_episode_length`, `Loss/value_loss`, or episode extras such as `Episode_Reward/ball_centering`
+- `threshold`: numeric target value
+- `mode`: `max` or `min`
+- `window`: moving-average window in training iterations
+- `patience`: number of consecutive windows that must satisfy the threshold
+
+The older single-rule `stop_condition` form still works for compatibility, but `default_stop_policy` and `stop_policy` are now the preferred schema.
+
+For the example above, runs are logged under the W&B project `joint_ablation`, and the `no_model_rand` entry uses `no_model_rand` as its run name and run ID.
 
 ## Reading Training Logs
 

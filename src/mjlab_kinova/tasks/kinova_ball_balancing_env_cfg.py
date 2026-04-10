@@ -1,4 +1,4 @@
-"""Kinova ball balancing task configurations for multiple policy variants."""
+"""Kinova ball balancing task configurations for control-space variants."""
 
 from __future__ import annotations
 
@@ -28,9 +28,7 @@ from . import ball_balancing_mdp as bb_mdp
 from .policy_actions import InitialFramePositionActionCfg
 from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
-PolicyVariant = Literal[
-    "baseline", "cartesian", "baseline_no_model_rand", "baseline_no_rand"
-]
+PolicyVariant = Literal["joint", "cartesian"]
 
 
 def robot_joints_cfg() -> SceneEntityCfg:
@@ -75,6 +73,10 @@ class PolicySpec:
     experiment_name: str
     action_kind: Literal["joint", "cartesian"]
     actor_terms: tuple[str, ...]
+
+
+@dataclass(frozen=True)
+class TrainingBehavior:
     use_observation_noise: bool
     reset_ee_ft_bias: bool
     randomize_ball_reset: bool
@@ -86,9 +88,9 @@ class PolicySpec:
 
 
 POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
-    "baseline": PolicySpec(
-        variant="baseline",
-        experiment_name="kinova_ball_balancing_baseline",
+    "joint": PolicySpec(
+        variant="joint",
+        experiment_name="kinova_ball_balancing_joint",
         action_kind="joint",
         actor_terms=(
             "joint_pos",
@@ -99,6 +101,17 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
             "ee_ang_vel",
             "ee_ft_wrench",
         ),
+    ),
+    "cartesian": PolicySpec(
+        variant="cartesian",
+        experiment_name="kinova_ball_balancing_cartesian",
+        action_kind="cartesian",
+        actor_terms=("ee_pos", "ee_quat", "ee_vel", "ee_ang_vel", "ee_ft_wrench"),
+    ),
+}
+
+DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
+    "joint": TrainingBehavior(
         use_observation_noise=True,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
@@ -108,11 +121,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         randomize_null_space_init=True,
         use_ball_kick=True,
     ),
-    "cartesian": PolicySpec(
-        variant="cartesian",
-        experiment_name="kinova_ball_balancing_cartesian",
-        action_kind="cartesian",
-        actor_terms=("ee_pos", "ee_quat", "ee_vel", "ee_ang_vel", "ee_ft_wrench"),
+    "cartesian": TrainingBehavior(
         use_observation_noise=True,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
@@ -122,51 +131,56 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         randomize_null_space_init=False,
         use_ball_kick=True,
     ),
-    "baseline_no_model_rand": PolicySpec(
-        variant="baseline_no_model_rand",
-        experiment_name="kinova_ball_balancing_baseline_no_model_rand",
-        action_kind="joint",
-        actor_terms=(
-            "joint_pos",
-            "joint_vel",
-            "ee_pos",
-            "ee_quat",
-            "ee_vel",
-            "ee_ang_vel",
-            "ee_ft_wrench",
-        ),
-        use_observation_noise=True,
-        reset_ee_ft_bias=True,
-        randomize_ball_reset=True,
-        randomize_ball_properties=True,
-        randomize_pd_gains=False,
-        randomize_robot_model=False,
-        randomize_null_space_init=False,
-        use_ball_kick=True,
-    ),
-    "baseline_no_rand": PolicySpec(
-        variant="baseline_no_rand",
-        experiment_name="kinova_ball_balancing_baseline_no_rand",
-        action_kind="joint",
-        actor_terms=(
-            "joint_pos",
-            "joint_vel",
-            "ee_pos",
-            "ee_quat",
-            "ee_vel",
-            "ee_ang_vel",
-            "ee_ft_wrench",
-        ),
-        use_observation_noise=False,
-        reset_ee_ft_bias=True,
-        randomize_ball_reset=False,
-        randomize_ball_properties=False,
-        randomize_pd_gains=False,
-        randomize_robot_model=False,
-        randomize_null_space_init=False,
-        use_ball_kick=True,
-    ),
 }
+
+
+def _resolve_training_behavior(
+    variant: PolicyVariant, params: TaskParameters
+) -> TrainingBehavior:
+    defaults = DEFAULT_TRAINING_BEHAVIOR[variant]
+    training = params.training
+    return TrainingBehavior(
+        use_observation_noise=(
+            defaults.use_observation_noise
+            if training.use_observation_noise is None
+            else training.use_observation_noise
+        ),
+        reset_ee_ft_bias=(
+            defaults.reset_ee_ft_bias
+            if training.reset_ee_ft_bias is None
+            else training.reset_ee_ft_bias
+        ),
+        randomize_ball_reset=(
+            defaults.randomize_ball_reset
+            if training.randomize_ball_reset is None
+            else training.randomize_ball_reset
+        ),
+        randomize_ball_properties=(
+            defaults.randomize_ball_properties
+            if training.randomize_ball_properties is None
+            else training.randomize_ball_properties
+        ),
+        randomize_pd_gains=(
+            defaults.randomize_pd_gains
+            if training.randomize_pd_gains is None
+            else training.randomize_pd_gains
+        ),
+        randomize_robot_model=(
+            defaults.randomize_robot_model
+            if training.randomize_robot_model is None
+            else training.randomize_robot_model
+        ),
+        randomize_null_space_init=(
+            defaults.randomize_null_space_init
+            if training.randomize_null_space_init is None
+            else training.randomize_null_space_init
+        ),
+        use_ball_kick=(
+            defaults.use_ball_kick
+            if training.use_ball_kick is None
+            else training.use_ball_kick
+        ),
+    )
 
 
 def get_ball_spec(
@@ -212,17 +226,18 @@ def _ball_entity_cfg(params: TaskParameters) -> EntityCfg:
 
 
 def kinova_ball_balancing_env_cfg(
-    variant: PolicyVariant = "baseline",
+    variant: PolicyVariant = "joint",
     play: bool = False,
     params: TaskParameters | None = None,
 ) -> ManagerBasedRlEnvCfg:
-    """Create environment config for one of the RO-MAN 2026 policy variants."""
+    """Create environment config for one of the Kinova control-space variants."""
     params = DEFAULT_TASK_PARAMETERS if params is None else params
     spec = POLICY_SPECS[variant]
+    behavior = _resolve_training_behavior(variant, params)
 
     observations = {
         "actor": ObservationGroupCfg(
-            terms=_actor_observation_terms(spec, play, params),
+            terms=_actor_observation_terms(spec, behavior, play, params),
             concatenate_terms=True,
             enable_corruption=not play,
         ),
@@ -245,7 +260,7 @@ def kinova_ball_balancing_env_cfg(
         ),
         observations=observations,
         actions=_actions_cfg(spec, params),
-        events=_events_cfg(spec, play, params),
+        events=_events_cfg(behavior, play, params),
         rewards=_rewards_cfg(params),
         terminations=_terminations_cfg(params),
         viewer=ViewerConfig(
@@ -279,12 +294,17 @@ def kinova_ball_balancing_env_cfg(
 
 
 def kinova_ppo_runner_cfg(
-    variant: PolicyVariant = "baseline",
+    variant: PolicyVariant = "joint",
     params: TaskParameters | None = None,
 ) -> RslRlOnPolicyRunnerCfg:
     """Create the PPO runner config for a given policy variant."""
     params = DEFAULT_TASK_PARAMETERS if params is None else params
     ppo = params.ppo
+    experiment_name = POLICY_SPECS[variant].experiment_name
+    if params.training.experiment_name_suffix:
+        experiment_name = f"{experiment_name}_{params.training.experiment_name_suffix}"
+    run_name = params.training.run_name or ""
+    wandb_project = params.training.wandb_project or "mjlab"
     return RslRlOnPolicyRunnerCfg(
         actor=RslRlModelCfg(
             hidden_dims=ppo.actor_hidden_dims,
@@ -315,8 +335,10 @@ def kinova_ppo_runner_cfg(
             desired_kl=ppo.desired_kl,
             max_grad_norm=ppo.max_grad_norm,
         ),
-        experiment_name=POLICY_SPECS[variant].experiment_name,
+        experiment_name=experiment_name,
+        run_name=run_name,
         logger="wandb",
+        wandb_project=wandb_project,
         save_interval=ppo.save_interval,
         num_steps_per_env=ppo.num_steps_per_env,
         max_iterations=ppo.max_iterations,
@@ -324,10 +346,10 @@ def kinova_ppo_runner_cfg(
 
 
 def _actor_observation_terms(
-    spec: PolicySpec, play: bool, params: TaskParameters
+    spec: PolicySpec, behavior: TrainingBehavior, play: bool, params: TaskParameters
 ) -> dict[str, ObservationTermCfg]:
     actor_terms = _shared_observation_terms(
-        use_noise=spec.use_observation_noise and not play, params=params
+        use_noise=behavior.use_observation_noise and not play, params=params
     )
     selected_terms = {name: actor_terms[name] for name in spec.actor_terms}
     return _with_observation_history(
@@ -369,13 +391,13 @@ def _with_observation_history(
     wrapped_terms: dict[str, ObservationTermCfg] = {}
     for name, term_cfg in observation_terms.items():
         wrapped_terms[name] = ObservationTermCfg(
-            func=bb_mdp.observation_history,
-            params={
-                "term_func": term_cfg.func,
-                "term_kwargs": term_cfg.params,
-                "history_length": history_length,
-            },
+            func=term_cfg.func,
+            params=term_cfg.params,
             noise=term_cfg.noise,
+            clip=term_cfg.clip,
+            scale=term_cfg.scale,
+            history_length=history_length,
+            flatten_history_dim=True,
         )
     return wrapped_terms
 
@@ -465,27 +487,27 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
 
 
 def _events_cfg(
-    spec: PolicySpec, play: bool, params: TaskParameters
+    behavior: TrainingBehavior, play: bool, params: TaskParameters
 ) -> dict[str, EventTermCfg]:
     randomization = params.randomization
     ball_reset = params.ball_reset
     joint_reset_range = (
         randomization.null_space_joint_offset
-        if spec.randomize_null_space_init
+        if behavior.randomize_null_space_init
         else (0.0, 0.0)
     )
-    ball_xy_range = ball_reset.xy_range if spec.randomize_ball_reset else (0.0, 0.0)
+    ball_xy_range = ball_reset.xy_range if behavior.randomize_ball_reset else (0.0, 0.0)
     ball_lin_vel_x_range = (
-        ball_reset.linear_velocity.x if spec.randomize_ball_reset else (0.0, 0.0)
+        ball_reset.linear_velocity.x if behavior.randomize_ball_reset else (0.0, 0.0)
     )
     ball_lin_vel_y_range = (
-        ball_reset.linear_velocity.y if spec.randomize_ball_reset else (0.0, 0.0)
+        ball_reset.linear_velocity.y if behavior.randomize_ball_reset else (0.0, 0.0)
     )
     ball_lin_vel_z_range = (
-        ball_reset.linear_velocity.z if spec.randomize_ball_reset else (0.0, 0.0)
+        ball_reset.linear_velocity.z if behavior.randomize_ball_reset else (0.0, 0.0)
     )
     ball_ang_vel_range = (
-        ball_reset.angular_velocity if spec.randomize_ball_reset else (0.0, 0.0)
+        ball_reset.angular_velocity if behavior.randomize_ball_reset else (0.0, 0.0)
     )
     events = {
         "reset_robot_joints": EventTermCfg(
@@ -505,10 +527,6 @@ def _events_cfg(
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
             },
-        ),
-        "reset_ee_ft_bias": EventTermCfg(
-            func=bb_mdp.reset_ee_ft_bias,
-            mode="reset",
         ),
         "reset_ball": EventTermCfg(
             func=bb_mdp.reset_ball_on_plate,
@@ -532,13 +550,13 @@ def _events_cfg(
         ),
     }
 
-    if spec.reset_ee_ft_bias:
+    if behavior.reset_ee_ft_bias:
         events["reset_ee_ft_bias"] = EventTermCfg(
             func=bb_mdp.reset_ee_ft_bias,
             mode="reset",
         )
 
-    if spec.randomize_ball_properties:
+    if behavior.randomize_ball_properties:
         events["randomize_ball_mass"] = EventTermCfg(
             func=bb_mdp.randomize_body_mass,
             mode="reset",
@@ -549,7 +567,7 @@ def _events_cfg(
             },
         )
 
-    if spec.randomize_pd_gains:
+    if behavior.randomize_pd_gains:
         events["randomize_pd_gains"] = EventTermCfg(
             func=bb_mdp.randomize_pd_gains,
             mode="reset",
@@ -561,7 +579,7 @@ def _events_cfg(
             },
         )
 
-    if spec.randomize_robot_model:
+    if behavior.randomize_robot_model:
         events["randomize_robot_model"] = EventTermCfg(
             func=bb_mdp.randomize_robot_model,
             mode="reset",
@@ -573,7 +591,7 @@ def _events_cfg(
             },
         )
 
-    if spec.use_ball_kick and not play:
+    if behavior.use_ball_kick and not play:
         kick = params.ball_kick
         events["ball_velocity_kick"] = EventTermCfg(
             func=bb_mdp.kick_ball_velocity,

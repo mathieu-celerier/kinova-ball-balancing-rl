@@ -60,14 +60,14 @@ randomization:
 
 rewards:
   is_alive: 0.2
-  ball_centering: 20.0
+  ball_centering: 200.0
   ball_centering_std: 0.06
-  ball_speed: -8.0
+  ball_speed: -40.0
   ball_speed_lin_weight: 1.0
   ball_speed_ang_weight: 1.0
   ball_height_above_plate: -50.0
   ball_height_soft_threshold: 0.06
-  ball_no_contact: -18.0
+  ball_no_contact: -100.0
   ball_no_contact_dist: 0.0
   pre_contact_action_rate_l2: -1.0
   post_contact_action_rate_l2: -0.1
@@ -78,17 +78,17 @@ rewards:
   joint_acc_l2: -0.001
   joint_torque_l2: -0.002
   joint_pos_limits: -5.0
-  plate_drop_under_ball: -5.0
+  plate_drop_under_ball: -20.0
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12
-  pre_contact_racquet_ang_vel_l2: -20.0
-  post_contact_racquet_ang_vel_l2: -5.0
+  pre_contact_racquet_ang_vel_l2: -80.0
+  post_contact_racquet_ang_vel_l2: -20.0
   pre_contact_racquet_lin_vel_l2: -80.0
   post_contact_racquet_lin_vel_l2: -20.0
-  pre_contact_racquet_ori_dist_from_initial_l2: -200.0
-  post_contact_racquet_ori_dist_from_initial_l2: -50.0
+  pre_contact_racquet_ori_dist_from_initial_l2: -800.0
+  post_contact_racquet_ori_dist_from_initial_l2: -100.0
   pre_contact_racquet_dist_from_initial_l2: -800.0
-  post_contact_racquet_dist_from_initial_l2: -120.0
+  post_contact_racquet_dist_from_initial_l2: -100.0
 
 terminations:
   max_xy_radius: 0.16
@@ -98,13 +98,13 @@ terminations:
 simulation:
   num_envs: 1024
   env_spacing: 2.0
-  timestep: 0.002
+  timestep: 0.001
   iterations: 20
   ls_iterations: 20
   ccd_iterations: 40
   nconmax: 256
   njmax: 1024
-  decimation: 5
+  decimation: 10
   episode_length_s: 10.0
   play_episode_length_s: 1000000000
   viewer_distance: 0.9
@@ -130,3 +130,16 @@ ppo:
   save_interval: 200
   num_steps_per_env: 24
   max_iterations: 10000
+
+training:
+  experiment_name_suffix: null
+  wandb_project: null
+  run_name: null
+  use_observation_noise: null
+  reset_ee_ft_bias: null
+  randomize_ball_reset: null
+  randomize_ball_properties: null
+  randomize_pd_gains: null
+  randomize_robot_model: null
+  randomize_null_space_init: null
+  use_ball_kick: null

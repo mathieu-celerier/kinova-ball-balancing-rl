@@ -29,9 +29,14 @@ A ball near the center is not necessarily stable. It may still have high speed a
 
 This is closer to dynamic stabilization than to static set-point regulation.
 
-## Policy Variants
+## Control-Space Variants
 
-### Baseline
+The repo now distinguishes between:
+
+- control-space variants: `joint` and `cartesian`
+- training presets: joint-space ablations such as `no_model_rand` and `no_rand`
+
+### Joint
 
 - action space: joint-space position commands
 - actor observations: joint state, end-effector state, F/T wrench
@@ -45,12 +50,12 @@ This is closer to dynamic stabilization than to static set-point regulation.
 - centering reward: active only while ball-racquet contact is present
 - randomization: ball mass, PD gains, robot model
 
-### BaselineNoRobotModelRand
+### Joint Preset: NoRobotModelRand
 
-- same observation/action interface as baseline
-- disables robot inertial randomization for ablation
+- same observation/action interface as the joint variant
+- disables PD-gain randomization, robot inertial randomization, and null-space reset randomization for ablation
 
-### BaselineNoRand
+### Joint Preset: NoRand
 
-- same observation/action interface as baseline
+- same observation/action interface as the joint variant
 - disables observation noise, stochastic resets, parameter randomization, and training kicks

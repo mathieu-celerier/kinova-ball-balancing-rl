@@ -22,12 +22,12 @@ This site is organized around the actual problem the code is solving:
 
 ## Main Task Variants
 
-- `Mjlab-BallBalancing-Kinova`: default baseline joint-space policy
-- `Mjlab-BallBalancing-Kinova-Baseline`: explicit baseline alias
+- `Mjlab-BallBalancing-Kinova`: canonical joint-space variant
+- `Mjlab-BallBalancing-Kinova-Joint`: explicit joint-space alias
 - `Mjlab-BallBalancing-Kinova-Cartesian`: Cartesian end-effector action variant
-- `Mjlab-BallBalancing-Kinova-BaselineNoRobotModelRand`: baseline without robot model randomization
-- `Mjlab-BallBalancing-Kinova-BaselineNoRand`: baseline with deterministic resets and no randomization
 - `Mjlab-BallBalancing-Kinova-Play`: play-mode alias
+
+Joint-space ablations such as "no robot model randomization" and "no randomization" are now modeled as parameter presets and training sets instead of separate control-space variants.
 
 ## Reading Order
 

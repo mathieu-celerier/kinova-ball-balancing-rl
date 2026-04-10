@@ -10,6 +10,13 @@ For task tuning, the main parameter entry points are [`config/task_parameters.ya
 
 The task registry loads `config/task_parameters.yaml` automatically by default. You can override the path with `MJLAB_KINOVA_TASK_PARAMS`.
 
+The canonical control-space variants are:
+
+- `Mjlab-BallBalancing-Kinova` for joint-space control
+- `Mjlab-BallBalancing-Kinova-Cartesian` for Cartesian end-effector control
+
+Joint-space ablations such as "no model randomization" and "no randomization" are now handled through preset YAMLs in [`config/presets/`](./config/presets) and batch training-set files in [`config/training_sets/`](./config/training_sets).
+
 Main pages:
 
 - [Home](./docs/index.md)
@@ -32,17 +39,45 @@ uv sync
 uv run train Mjlab-BallBalancing-Kinova --env.scene.num-envs 512
 ```
 
+```bash
+uv run train Mjlab-BallBalancing-Kinova-Cartesian --env.scene.num-envs 512
+```
+
 Kinova training now defaults to Weights & Biases when it is configured in your shell. If W&B is not set up, training falls back to TensorBoard automatically.
 
 ```bash
 uv run train Mjlab-BallBalancing-Kinova
 ```
 
+To launch a set of runs for one variant:
+
+```bash
+uv run kinova-train-set config/training_sets/joint_ablation.yaml -- --env.scene.num-envs 512
+```
+
+To estimate per-run and whole-set min/max duration bounds:
+
+```bash
+uv run kinova-train-set-duration config/training_sets/joint_randomization_ablation.yaml
+```
+
+That workflow merges the base task parameters, any selected preset YAMLs, and the per-run overrides declared in the training-set file.
+
+Arguments after `--` are forwarded to the underlying `train` command for every run in the set, so common CLI overrides such as `--env.scene.num-envs 512` can be applied once at launch time.
+
+For W&B-backed launches from `kinova-train-set`:
+
+- the training-set file stem becomes the W&B project name
+- the YAML `runs[].name` becomes the run display name
+- a W&B-compatible run ID is derived from `runs[].name` and exported to the training process
+
+Each training set can declare a metric-based `default_stop_policy`, and each run can override it with its own `stop_policy`, including multiple criteria plus explicit `min_iterations` and `max_iterations`.
+
 ## Play
 
 ```bash
 uv run play Mjlab-BallBalancing-Kinova \
-  --checkpoint-file logs/rsl_rl/kinova_ball_balancing_baseline/.../model_*.pt
+  --checkpoint-file logs/rsl_rl/kinova_ball_balancing_joint/.../model_*.pt
 ```
 
 ## Serve the Docs

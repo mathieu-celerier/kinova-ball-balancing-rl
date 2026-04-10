@@ -103,7 +103,7 @@ Why it matters:
 Relation to this repo:
 
 - this repo follows a similar architectural idea,
-- the baseline policy outputs joint-space references to position-controlled actuators,
+- the joint-space policy outputs joint-space references to position-controlled actuators,
 - the Cartesian policy outputs local end-effector position references that are turned into joint commands through differential IK,
 - in both cases, learning happens above the low-level actuator realization.
 

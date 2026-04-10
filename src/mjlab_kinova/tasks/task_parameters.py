@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import copy
 import os
 from dataclasses import asdict, dataclass, field, fields, is_dataclass
 from pathlib import Path
-from typing import Any, TypeVar, get_args, get_origin, get_type_hints
+from typing import Any, Iterable, TypeVar, get_args, get_origin, get_type_hints
 
 import yaml
 
@@ -186,6 +187,21 @@ class PpoParameters:
 
 
 @dataclass(frozen=True)
+class TrainingParameters:
+    experiment_name_suffix: str | None = None
+    wandb_project: str | None = None
+    run_name: str | None = None
+    use_observation_noise: bool | None = None
+    reset_ee_ft_bias: bool | None = None
+    randomize_ball_reset: bool | None = None
+    randomize_ball_properties: bool | None = None
+    randomize_pd_gains: bool | None = None
+    randomize_robot_model: bool | None = None
+    randomize_null_space_init: bool | None = None
+    use_ball_kick: bool | None = None
+
+
+@dataclass(frozen=True)
 class TaskParameters:
     ball: BallParameters = field(default_factory=BallParameters)
     observation_history_length: int = 5
@@ -199,6 +215,7 @@ class TaskParameters:
     terminations: TerminationParameters = field(default_factory=TerminationParameters)
     simulation: SimulationParameters = field(default_factory=SimulationParameters)
     ppo: PpoParameters = field(default_factory=PpoParameters)
+    training: TrainingParameters = field(default_factory=TrainingParameters)
 
 
 DEFAULT_TASK_PARAMETERS = TaskParameters()
@@ -255,7 +272,21 @@ def task_parameters_to_dict(params: TaskParameters) -> dict[str, Any]:
     return asdict(params)
 
 
-def load_task_parameters(path: str | Path = DEFAULT_TASK_PARAMETERS_PATH) -> TaskParameters:
+def merge_task_parameter_overrides(
+    *overrides: dict[str, Any],
+    base: TaskParameters = DEFAULT_TASK_PARAMETERS,
+) -> TaskParameters:
+    params = copy.deepcopy(base)
+    for override in overrides:
+        if not override:
+            continue
+        if not isinstance(override, dict):
+            raise TypeError(f"Top-level YAML object must be a mapping, got {type(override).__name__}")
+        params = _merge_dataclass(params, override)
+    return params
+
+
+def load_task_parameter_overrides(path: str | Path) -> dict[str, Any]:
     config_path = Path(path)
     with config_path.open("r", encoding="utf-8") as stream:
         raw = yaml.safe_load(stream) or {}
@@ -263,7 +294,24 @@ def load_task_parameters(path: str | Path = DEFAULT_TASK_PARAMETERS_PATH) -> Tas
     if not isinstance(raw, dict):
         raise TypeError(f"Top-level YAML object must be a mapping, got {type(raw).__name__}")
 
-    return _merge_dataclass(DEFAULT_TASK_PARAMETERS, raw)
+    return raw
+
+
+def load_task_parameters(
+    path: str | Path = DEFAULT_TASK_PARAMETERS_PATH,
+    *,
+    base: TaskParameters = DEFAULT_TASK_PARAMETERS,
+) -> TaskParameters:
+    return merge_task_parameter_overrides(load_task_parameter_overrides(path), base=base)
+
+
+def load_task_parameters_from_files(
+    paths: Iterable[str | Path],
+    *,
+    base: TaskParameters = DEFAULT_TASK_PARAMETERS,
+) -> TaskParameters:
+    overrides = [load_task_parameter_overrides(path) for path in paths]
+    return merge_task_parameter_overrides(*overrides, base=base)
 
 
 def load_default_task_parameters() -> TaskParameters:
