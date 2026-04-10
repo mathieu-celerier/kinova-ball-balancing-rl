@@ -203,6 +203,15 @@ def body_position_w(
     return asset.data.body_link_pos_w[:, asset_cfg.body_ids].squeeze(1)
 
 
+def body_orientation_w(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the selected body orientation quaternion in world frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    return asset.data.body_link_quat_w[:, asset_cfg.body_ids].squeeze(1)
+
+
 def body_linear_velocity_w(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
@@ -212,6 +221,17 @@ def body_linear_velocity_w(
     if hasattr(asset.data, "body_link_lin_vel_w"):
         return asset.data.body_link_lin_vel_w[:, asset_cfg.body_ids].squeeze(1)
     return asset.data.body_link_vel_w[:, asset_cfg.body_ids, :3].squeeze(1)
+
+
+def body_angular_velocity_w(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return the selected body angular velocity in world frame."""
+    asset: Entity = env.scene[asset_cfg.name]
+    if hasattr(asset.data, "body_link_ang_vel_w"):
+        return asset.data.body_link_ang_vel_w[:, asset_cfg.body_ids].squeeze(1)
+    return asset.data.body_link_vel_w[:, asset_cfg.body_ids, 3:].squeeze(1)
 
 
 def body_linear_velocity_in_body_frame(
@@ -601,6 +621,15 @@ def racquet_lin_vel_l2(
     return torch.sum(torch.square(plate_vel_w), dim=-1)
 
 
+def racquet_ang_vel_l2(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalty on squared racquet (plate body) angular speed in world frame."""
+    plate_ang_vel_w = body_angular_velocity_w(env, plate_asset_cfg)
+    return torch.sum(torch.square(plate_ang_vel_w), dim=-1)
+
+
 def racquet_dist_from_initial_l2(
     env: "ManagerBasedRlEnv",
     plate_asset_cfg: SceneEntityCfg,
@@ -617,6 +646,29 @@ def racquet_dist_from_initial_l2(
 
     nominal_pos_w = env._racquet_nominal_pos_w
     return torch.sum(torch.square(plate_pos_w - nominal_pos_w), dim=-1)
+
+
+def racquet_ori_dist_from_initial_l2(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalty on racquet orientation error from the nominal home pose."""
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=plate_asset_cfg,
+        )
+
+    _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
+    plate_quat_w = body_orientation_w(env, plate_asset_cfg)
+    zero_pos = torch.zeros((plate_quat_w.shape[0], 3), device=env.device, dtype=plate_quat_w.dtype)
+    _, rot_error = compute_pose_error(
+        zero_pos,
+        plate_quat_w,
+        zero_pos,
+        nominal_quat_w,
+    )
+    return torch.sum(torch.square(rot_error), dim=-1)
 
 
 def _compute_nominal_racquet_pos_w(

@@ -42,7 +42,9 @@ class ObservationNoiseParameters:
     joint_pos: NoiseRange = field(default_factory=lambda: NoiseRange(-0.01, 0.01))
     joint_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
     ee_pos: NoiseRange = field(default_factory=lambda: NoiseRange(-0.003, 0.003))
+    ee_quat: NoiseRange = field(default_factory=lambda: NoiseRange(-0.01, 0.01))
     ee_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.05, 0.05))
+    ee_ang_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
     ee_ft_wrench: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
 
 
@@ -58,7 +60,7 @@ class CartesianActionParameters:
     damping: float = 0.05
     max_dq: float = 0.2
     position_weight: float = 1.0
-    orientation_weight: float = 0.0
+    orientation_weight: float = 1.0
     posture_weight: float = 0.03
 
 
@@ -126,8 +128,12 @@ class RewardParameters:
     plate_drop_under_ball: float = -5.0
     plate_drop_ball_height_threshold: float = 0.01
     plate_drop_xy_radius: float = 0.12
+    pre_contact_racquet_ang_vel_l2: float = -20.0
+    post_contact_racquet_ang_vel_l2: float = -5.0
     pre_contact_racquet_lin_vel_l2: float = -80.0
     post_contact_racquet_lin_vel_l2: float = -20.0
+    pre_contact_racquet_ori_dist_from_initial_l2: float = -200.0
+    post_contact_racquet_ori_dist_from_initial_l2: float = -50.0
     pre_contact_racquet_dist_from_initial_l2: float = -800.0
     post_contact_racquet_dist_from_initial_l2: float = -120.0
 

@@ -19,7 +19,6 @@ class InitialFramePositionActionCfg(DifferentialIKActionCfg):
 
     def __post_init__(self) -> None:
         self.use_relative_mode = False
-        self.orientation_weight = 0.0
 
     def build(self, env: ManagerBasedRlEnv) -> "InitialFramePositionAction":
         return InitialFramePositionAction(self, env)

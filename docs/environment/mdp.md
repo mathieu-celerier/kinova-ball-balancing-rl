@@ -20,13 +20,17 @@ Baseline:
 - relative joint positions
 - relative joint velocities
 - end-effector position in world frame
+- end-effector orientation in world frame
 - end-effector linear velocity in world frame
+- end-effector angular velocity in world frame
 - end-effector F/T wrench
 
 Cartesian:
 
 - end-effector position in world frame
+- end-effector orientation in world frame
 - end-effector linear velocity in world frame
+- end-effector angular velocity in world frame
 - end-effector F/T wrench
 
 ### Critic Observations
@@ -45,7 +49,9 @@ Training noise is injected into actor observations:
 - joint position: `[-0.01, 0.01]`
 - joint velocity: `[-0.1, 0.1]`
 - end-effector position: `[-0.003, 0.003]`
+- end-effector orientation quaternion: `[-0.01, 0.01]`
 - end-effector velocity: `[-0.05, 0.05]`
+- end-effector angular velocity: `[-0.1, 0.1]`
 - F/T wrench: `[-0.1, 0.1]`
 
 ## Actions
@@ -73,7 +79,7 @@ with:
 - `a`: policy action
 - `delta_pos_scale = 0.04`
 
-The code also stores the initial orientation reference, but the IK orientation weight is `0.0`, so the task does not explicitly enforce an orientation target.
+The code also stores the initial orientation reference, and the IK objective keeps that orientation active with `orientation_weight = 1.0`.
 
 ## Reward Terms
 
@@ -94,7 +100,9 @@ Negative terms:
 - `joint_torque_l2`: `-0.0002`
 - `joint_pos_limits`: `-0.2`
 - `plate_drop_under_ball`: `-2.0`
+- `racquet_ang_vel_l2`: angular-speed regularization on the racquet
 - `racquet_lin_vel_l2`: `-5.0`
+- `racquet_ori_dist_from_initial_l2`: orientation deviation from the nominal racquet pose
 - `racquet_dist_from_initial_l2`: `-30.0`
 
 ### Key Reward Intuition

@@ -90,7 +90,15 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         variant="baseline",
         experiment_name="kinova_ball_balancing_baseline",
         action_kind="joint",
-        actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
+        actor_terms=(
+            "joint_pos",
+            "joint_vel",
+            "ee_pos",
+            "ee_quat",
+            "ee_vel",
+            "ee_ang_vel",
+            "ee_ft_wrench",
+        ),
         use_observation_noise=True,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
@@ -104,7 +112,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         variant="cartesian",
         experiment_name="kinova_ball_balancing_cartesian",
         action_kind="cartesian",
-        actor_terms=("ee_pos", "ee_vel", "ee_ft_wrench"),
+        actor_terms=("ee_pos", "ee_quat", "ee_vel", "ee_ang_vel", "ee_ft_wrench"),
         use_observation_noise=True,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
@@ -118,7 +126,15 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         variant="baseline_no_model_rand",
         experiment_name="kinova_ball_balancing_baseline_no_model_rand",
         action_kind="joint",
-        actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
+        actor_terms=(
+            "joint_pos",
+            "joint_vel",
+            "ee_pos",
+            "ee_quat",
+            "ee_vel",
+            "ee_ang_vel",
+            "ee_ft_wrench",
+        ),
         use_observation_noise=True,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
@@ -132,7 +148,15 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
         variant="baseline_no_rand",
         experiment_name="kinova_ball_balancing_baseline_no_rand",
         action_kind="joint",
-        actor_terms=("joint_pos", "joint_vel", "ee_pos", "ee_vel", "ee_ft_wrench"),
+        actor_terms=(
+            "joint_pos",
+            "joint_vel",
+            "ee_pos",
+            "ee_quat",
+            "ee_vel",
+            "ee_ang_vel",
+            "ee_ft_wrench",
+        ),
         use_observation_noise=False,
         reset_ee_ft_bias=True,
         randomize_ball_reset=False,
@@ -344,7 +368,9 @@ def _shared_observation_terms(
     joint_pos_noise = _noise_cfg(use_noise, noise.joint_pos)
     joint_vel_noise = _noise_cfg(use_noise, noise.joint_vel)
     ee_pos_noise = _noise_cfg(use_noise, noise.ee_pos)
+    ee_quat_noise = _noise_cfg(use_noise, noise.ee_quat)
     ee_vel_noise = _noise_cfg(use_noise, noise.ee_vel)
+    ee_ang_vel_noise = _noise_cfg(use_noise, noise.ee_ang_vel)
     ft_noise = _noise_cfg(use_noise, noise.ee_ft_wrench)
     return {
         "joint_pos": ObservationTermCfg(
@@ -362,10 +388,20 @@ def _shared_observation_terms(
             params={"asset_cfg": racquet_frame_cfg()},
             noise=ee_pos_noise,
         ),
+        "ee_quat": ObservationTermCfg(
+            func=bb_mdp.body_orientation_w,
+            params={"asset_cfg": racquet_frame_cfg()},
+            noise=ee_quat_noise,
+        ),
         "ee_vel": ObservationTermCfg(
             func=bb_mdp.body_linear_velocity_w,
             params={"asset_cfg": racquet_frame_cfg()},
             noise=ee_vel_noise,
+        ),
+        "ee_ang_vel": ObservationTermCfg(
+            func=bb_mdp.body_angular_velocity_w,
+            params={"asset_cfg": racquet_frame_cfg()},
+            noise=ee_ang_vel_noise,
         ),
         "ee_ft_wrench": ObservationTermCfg(
             func=bb_mdp.ee_ft_wrench,
@@ -694,6 +730,30 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "max_contact_dist": rewards.ball_no_contact_dist,
             },
         ),
+        "racquet_ang_vel_l2": RewardTermCfg(
+            func=bb_mdp.contact_phase_reward,
+            weight=rewards.post_contact_racquet_ang_vel_l2,
+            params={
+                "term_func": bb_mdp.racquet_ang_vel_l2,
+                "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
+                "activate_after_contact": True,
+                "ball_geom_name": "ball/ball_geom",
+                "racquet_geom_name": "robot/plate_collision",
+                "max_contact_dist": rewards.ball_no_contact_dist,
+            },
+        ),
+        "pre_contact_racquet_ang_vel_l2": RewardTermCfg(
+            func=bb_mdp.contact_phase_reward,
+            weight=rewards.pre_contact_racquet_ang_vel_l2,
+            params={
+                "term_func": bb_mdp.racquet_ang_vel_l2,
+                "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
+                "activate_after_contact": False,
+                "ball_geom_name": "ball/ball_geom",
+                "racquet_geom_name": "robot/plate_collision",
+                "max_contact_dist": rewards.ball_no_contact_dist,
+            },
+        ),
         "racquet_dist_from_initial_l2": RewardTermCfg(
             func=bb_mdp.contact_phase_reward,
             weight=rewards.post_contact_racquet_dist_from_initial_l2,
@@ -701,6 +761,30 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "term_func": bb_mdp.racquet_dist_from_initial_l2,
                 "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
                 "activate_after_contact": True,
+                "ball_geom_name": "ball/ball_geom",
+                "racquet_geom_name": "robot/plate_collision",
+                "max_contact_dist": rewards.ball_no_contact_dist,
+            },
+        ),
+        "racquet_ori_dist_from_initial_l2": RewardTermCfg(
+            func=bb_mdp.contact_phase_reward,
+            weight=rewards.post_contact_racquet_ori_dist_from_initial_l2,
+            params={
+                "term_func": bb_mdp.racquet_ori_dist_from_initial_l2,
+                "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
+                "activate_after_contact": True,
+                "ball_geom_name": "ball/ball_geom",
+                "racquet_geom_name": "robot/plate_collision",
+                "max_contact_dist": rewards.ball_no_contact_dist,
+            },
+        ),
+        "pre_contact_racquet_ori_dist_from_initial_l2": RewardTermCfg(
+            func=bb_mdp.contact_phase_reward,
+            weight=rewards.pre_contact_racquet_ori_dist_from_initial_l2,
+            params={
+                "term_func": bb_mdp.racquet_ori_dist_from_initial_l2,
+                "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
+                "activate_after_contact": False,
                 "ball_geom_name": "ball/ball_geom",
                 "racquet_geom_name": "robot/plate_collision",
                 "max_contact_dist": rewards.ball_no_contact_dist,

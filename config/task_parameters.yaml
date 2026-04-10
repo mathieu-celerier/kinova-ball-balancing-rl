@@ -11,7 +11,9 @@ observation_noise:
   joint_pos: { min: -0.01, max: 0.01 }
   joint_vel: { min: -0.1, max: 0.1 }
   ee_pos: { min: -0.003, max: 0.003 }
+  ee_quat: { min: -0.01, max: 0.01 }
   ee_vel: { min: -0.05, max: 0.05 }
+  ee_ang_vel: { min: -0.1, max: 0.1 }
   ee_ft_wrench: { min: -0.1, max: 0.1 }
 
 joint_action:
@@ -23,7 +25,7 @@ cartesian_action:
   damping: 0.05
   max_dq: 0.2
   position_weight: 1.0
-  orientation_weight: 0.0
+  orientation_weight: 1.0
   posture_weight: 0.03
 
 ball_reset:
@@ -77,8 +79,12 @@ rewards:
   plate_drop_under_ball: -5.0
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12
+  pre_contact_racquet_ang_vel_l2: -20.0
+  post_contact_racquet_ang_vel_l2: -5.0
   pre_contact_racquet_lin_vel_l2: -80.0
   post_contact_racquet_lin_vel_l2: -20.0
+  pre_contact_racquet_ori_dist_from_initial_l2: -200.0
+  post_contact_racquet_ori_dist_from_initial_l2: -50.0
   pre_contact_racquet_dist_from_initial_l2: -800.0
   post_contact_racquet_dist_from_initial_l2: -120.0
 
