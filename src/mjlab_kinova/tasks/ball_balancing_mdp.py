@@ -473,6 +473,25 @@ def ball_no_contact_mujoco(
     return no_contact
 
 
+def ball_contact_state_mujoco(
+    env: "ManagerBasedRlEnv",
+    ball_geom_name: str = "ball/ball_geom",
+    racquet_geom_name: str = "robot/plate_collision",
+    max_contact_dist: float = 0.0,
+) -> torch.Tensor:
+    """Binary contact state for the ball-racquet geom pair.
+
+    Returns 1.0 when ball-racquet contact is present, otherwise 0.0.
+    """
+    no_contact = ball_no_contact_mujoco(
+        env=env,
+        ball_geom_name=ball_geom_name,
+        racquet_geom_name=racquet_geom_name,
+        max_contact_dist=max_contact_dist,
+    )
+    return (1.0 - no_contact).unsqueeze(-1)
+
+
 def ball_no_contact_xy_proxy(
     env: "ManagerBasedRlEnv",
     ball_name: str,

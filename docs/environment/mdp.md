@@ -43,6 +43,7 @@ The critic receives privileged ball state:
 
 - ball position in plate frame
 - ball linear velocity in plate frame
+- ball-racquet contact state
 
 This helps optimize the policy during simulation without forcing the deployed actor to depend on perfect ball-state access.
 

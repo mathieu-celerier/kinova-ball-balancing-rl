@@ -376,6 +376,9 @@ def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTe
                     "plate_asset_cfg": racquet_frame_cfg(),
                 },
             ),
+            "ball_contact_state": ObservationTermCfg(
+                func=bb_mdp.ball_contact_state_mujoco,
+            ),
         }
     )
     return _with_observation_history(terms, history_length=params.observation_history_length)
