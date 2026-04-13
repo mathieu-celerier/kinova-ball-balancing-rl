@@ -4,6 +4,7 @@ import argparse
 import os
 import subprocess
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from mjlab_kinova.play_set import _play_command
@@ -29,6 +30,11 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
         "--dry-run",
         action="store_true",
         help="Print the resolved play command without launching it.",
+    )
+    parser.add_argument(
+        "--ball-kick",
+        action="store_true",
+        help="Enable ball-kick interval disturbances while replaying.",
     )
     args, play_args = parser.parse_known_args()
     return args, play_args
@@ -62,6 +68,11 @@ def main() -> int:
         training_set_path=run_config_path,
         base_params=base_params,
     )
+    if args.ball_kick:
+        params = replace(
+            params,
+            training=replace(params.training, enable_ball_kick_in_play=True),
+        )
 
     temp_config_path = _write_temp_params(params)
     cmd = _play_command(

@@ -603,7 +603,7 @@ def _events_cfg(
             },
         )
 
-    if behavior.use_ball_kick and not play:
+    if behavior.use_ball_kick and (not play or params.training.enable_ball_kick_in_play):
         kick = params.ball_kick
         events["ball_velocity_kick"] = EventTermCfg(
             func=bb_mdp.kick_ball_velocity,

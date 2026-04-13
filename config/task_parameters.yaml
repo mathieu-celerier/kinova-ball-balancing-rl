@@ -124,6 +124,7 @@ training:
   wandb_project: null
   run_name: null
   use_observation_noise: null
+  enable_ball_kick_in_play: false
   reset_ee_ft_bias: null
   randomize_ball_reset: null
   randomize_ball_properties: null

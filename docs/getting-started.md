@@ -126,12 +126,16 @@ uv run kinova-play-set config/training_sets/joint_randomization_ablation.yaml \
   -- --agent random --num-envs 1 --viewer native
 ```
 
+Add `--ball-kick` before the `--` separator to replay with interval disturbance kicks enabled.
+
 To resolve play parameters from one extracted single-run config:
 
 ```bash
 uv run kinova-play-run config/training_sets/joint_randomization_ablation/ball_reset_only.yaml \
   -- --agent random --num-envs 1 --viewer native
 ```
+
+`kinova-play-run` also supports `--ball-kick` before the `--` separator.
 
 ## GPU Fallback
 

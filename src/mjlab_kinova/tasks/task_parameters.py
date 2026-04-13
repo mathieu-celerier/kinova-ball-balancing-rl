@@ -180,6 +180,7 @@ class TrainingParameters:
     wandb_project: str | None = None
     run_name: str | None = None
     use_observation_noise: bool | None = None
+    enable_ball_kick_in_play: bool = False
     reset_ee_ft_bias: bool | None = None
     randomize_ball_reset: bool | None = None
     randomize_ball_properties: bool | None = None
