@@ -5,7 +5,6 @@ from __future__ import annotations
 import os
 import time
 from typing import TYPE_CHECKING
-from typing import Any, Callable
 
 import mujoco
 import mujoco_warp as mjwarp
@@ -13,7 +12,6 @@ import torch
 import warp as wp
 
 from mjlab.entity import Entity
-from mjlab.managers.manager_base import ManagerTermBase
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
 from mjlab.utils.lab_api.math import compute_pose_error, quat_apply, quat_apply_inverse
@@ -327,66 +325,6 @@ def joint_torque_l2(
     return torch.sum(torch.square(torques), dim=-1)
 
 
-def ball_centering_reward(
-    env: "ManagerBasedRlEnv",
-    ball_name: str,
-    plate_asset_cfg: SceneEntityCfg,
-    std: float,
-    center_x: float = 0.0,
-    center_y: float = 0.0,
-) -> torch.Tensor:
-    """Reward for keeping the ball near the plate center in XY."""
-    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
-    dx = ball_pos_plate[:, 0] - center_x
-    dy = ball_pos_plate[:, 1] - center_y
-    radial_sq = torch.square(dx) + torch.square(dy)
-    return torch.exp(-radial_sq / (std**2))
-
-
-def ball_centering_contact_reward(
-    env: "ManagerBasedRlEnv",
-    ball_name: str,
-    plate_asset_cfg: SceneEntityCfg,
-    ball_geom_name: str,
-    racquet_geom_name: str,
-    max_contact_dist: float,
-    std: float,
-    center_x: float = 0.0,
-    center_y: float = 0.0,
-) -> torch.Tensor:
-    """Reward centering only while ball-racquet contact is active."""
-    centering = ball_centering_reward(
-        env=env,
-        ball_name=ball_name,
-        plate_asset_cfg=plate_asset_cfg,
-        std=std,
-        center_x=center_x,
-        center_y=center_y,
-    )
-    no_contact = ball_no_contact_mujoco(
-        env=env,
-        ball_geom_name=ball_geom_name,
-        racquet_geom_name=racquet_geom_name,
-        max_contact_dist=max_contact_dist,
-    )
-    return centering * (1.0 - no_contact)
-
-
-def ball_speed_penalty(
-    env: "ManagerBasedRlEnv",
-    ball_name: str,
-    plate_asset_cfg: SceneEntityCfg,
-    lin_weight: float = 1.0,
-    ang_weight: float = 1.0,
-) -> torch.Tensor:
-    """Penalty on ball linear and angular speed in plate frame."""
-    ball_lin_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
-    ball_ang_vel_plate = ball_ang_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
-    lin_penalty = torch.sum(torch.square(ball_lin_vel_plate), dim=-1)
-    ang_penalty = torch.sum(torch.square(ball_ang_vel_plate), dim=-1)
-    return lin_weight * lin_penalty + ang_weight * ang_penalty
-
-
 def ball_fell_off(
     env: "ManagerBasedRlEnv",
     ball_name: str,
@@ -435,18 +373,6 @@ def ball_too_high(
         ball_pos_plate[:, 2] > max_height,
         ball_lin_vel_w[:, 2] > min_world_z_vel,
     )
-
-
-def ball_height_above_plate_penalty(
-    env: "ManagerBasedRlEnv",
-    ball_name: str,
-    plate_asset_cfg: SceneEntityCfg,
-    soft_height: float,
-) -> torch.Tensor:
-    """Penalty on ball height above a soft plate-frame threshold."""
-    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
-    excess = torch.clamp(ball_pos_plate[:, 2] - soft_height, min=0.0)
-    return torch.square(excess)
 
 
 def plate_drop_under_ball_penalty(
@@ -547,89 +473,6 @@ def ball_no_contact_mujoco(
     return no_contact
 
 
-class ball_no_contact_after_first_contact(ManagerTermBase):
-    """Penalty is inactive until an env has established ball-racquet contact once."""
-
-    def __init__(self, cfg, env: "ManagerBasedRlEnv"):
-        super().__init__(env)
-        self.params = cfg.params
-        self._has_seen_contact = torch.zeros(
-            self.num_envs, device=self.device, dtype=torch.bool
-        )
-
-    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-        if env_ids is None:
-            env_ids = slice(None)
-        self._has_seen_contact[env_ids] = False
-
-    def __call__(self, env: "ManagerBasedRlEnv", **kwargs) -> torch.Tensor:
-        no_contact = ball_no_contact_mujoco(env=env, **kwargs)
-        has_contact = no_contact == 0.0
-        self._has_seen_contact |= has_contact
-        return no_contact * self._has_seen_contact.float()
-
-
-class contact_phase_reward(ManagerTermBase):
-    """Gate an arbitrary reward term by whether first contact has already happened."""
-
-    def __init__(self, cfg, env: "ManagerBasedRlEnv"):
-        super().__init__(env)
-        self.params = cfg.params
-        self._has_seen_contact = torch.zeros(
-            self.num_envs, device=self.device, dtype=torch.bool
-        )
-
-    def _resolve_nested_term_kwargs(self, value: Any) -> Any:
-        if isinstance(value, SceneEntityCfg):
-            value.resolve(self._env.scene)
-            return value
-        if isinstance(value, dict):
-            return {
-                key: self._resolve_nested_term_kwargs(sub_value)
-                for key, sub_value in value.items()
-            }
-        if isinstance(value, list):
-            return [self._resolve_nested_term_kwargs(sub_value) for sub_value in value]
-        if isinstance(value, tuple):
-            return tuple(self._resolve_nested_term_kwargs(sub_value) for sub_value in value)
-        return value
-
-    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-        if env_ids is None:
-            env_ids = slice(None)
-        self._has_seen_contact[env_ids] = False
-
-    def __call__(
-        self,
-        env: "ManagerBasedRlEnv",
-        term_func: Callable[..., torch.Tensor],
-        term_kwargs: dict[str, Any] | None = None,
-        ball_geom_name: str = "ball/ball_geom",
-        racquet_geom_name: str = "robot/plate_collision",
-        max_contact_dist: float = 0.0,
-        activate_after_contact: bool = True,
-    ) -> torch.Tensor:
-        no_contact = ball_no_contact_mujoco(
-            env=env,
-            ball_geom_name=ball_geom_name,
-            racquet_geom_name=racquet_geom_name,
-            max_contact_dist=max_contact_dist,
-        )
-        has_contact = no_contact == 0.0
-        self._has_seen_contact |= has_contact
-
-        resolved_term_kwargs = self._resolve_nested_term_kwargs(term_kwargs or {})
-        base_reward = term_func(env, **resolved_term_kwargs)
-        if base_reward.ndim > 1:
-            base_reward = base_reward.reshape(base_reward.shape[0], -1).sum(dim=-1)
-        phase_mask = (
-            self._has_seen_contact
-            if activate_after_contact
-            else ~self._has_seen_contact
-        )
-        return base_reward * phase_mask.float()
-
-
 def ball_no_contact_xy_proxy(
     env: "ManagerBasedRlEnv",
     ball_name: str,
@@ -676,16 +519,6 @@ def racquet_lin_vel_l2(
     return torch.sum(torch.square(plate_vel_w), dim=-1)
 
 
-def racquet_lin_vel_reward(
-    env: "ManagerBasedRlEnv",
-    plate_asset_cfg: SceneEntityCfg,
-    std: float,
-) -> torch.Tensor:
-    """Reward for keeping racquet linear velocity near zero."""
-    lin_vel_l2 = racquet_lin_vel_l2(env=env, plate_asset_cfg=plate_asset_cfg)
-    return torch.exp(-lin_vel_l2 / (std**2))
-
-
 def racquet_ang_vel_l2(
     env: "ManagerBasedRlEnv",
     plate_asset_cfg: SceneEntityCfg,
@@ -693,16 +526,6 @@ def racquet_ang_vel_l2(
     """Penalty on squared racquet (plate body) angular speed in world frame."""
     plate_ang_vel_w = body_angular_velocity_w(env, plate_asset_cfg)
     return torch.sum(torch.square(plate_ang_vel_w), dim=-1)
-
-
-def racquet_ang_vel_reward(
-    env: "ManagerBasedRlEnv",
-    plate_asset_cfg: SceneEntityCfg,
-    std: float,
-) -> torch.Tensor:
-    """Reward for keeping racquet angular velocity near zero."""
-    ang_vel_l2 = racquet_ang_vel_l2(env=env, plate_asset_cfg=plate_asset_cfg)
-    return torch.exp(-ang_vel_l2 / (std**2))
 
 
 def racquet_dist_from_initial_l2(

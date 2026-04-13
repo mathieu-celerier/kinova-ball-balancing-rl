@@ -293,7 +293,7 @@ Supported stop-policy fields are:
 
 Each criterion supports:
 
-- `metric`: metric name produced by the runner, for example `Train/mean_reward`, `Train/mean_episode_length`, `Loss/value_loss`, or episode extras such as `Episode_Reward/ball_centering`
+- `metric`: metric name produced by the runner, for example `Train/mean_reward`, `Train/mean_episode_length`, `Loss/value_loss`, or episode extras such as `Episode_Reward/racquet_centering`
 - `threshold`: numeric target value
 - `mode`: `max` or `min`
 - `window`: moving-average window in training iterations
@@ -313,6 +313,6 @@ The console output during training mixes PPO optimization metrics with episode s
 - `Mean surrogate loss`: PPO policy objective. Near zero is common once updates are conservative.
 - `Mean action noise std`: current policy exploration scale.
 
-Reward breakdown lines such as `Episode_Reward/ball_centering` are averaged episode-term contributions normalized by episode horizon. They are most useful for trend comparison across training, not as standalone “scores.”
+Reward breakdown lines such as `Episode_Reward/racquet_centering` are averaged episode-term contributions normalized by episode horizon. They are most useful for trend comparison across training, not as standalone “scores.”
 
 Termination lines such as `Episode_Termination/ball_fell_off` count how often resets happened for each condition inside the current logging window. They are not probabilities.

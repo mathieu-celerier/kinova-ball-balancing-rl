@@ -59,40 +59,24 @@ randomization:
   robot_dof_armature_scale: [0.9, 1.1]
 
 rewards:
-  is_alive: 0.2
-  ball_centering: 200.0
-  ball_centering_std: 0.06
-  ball_speed: -40.0
-  ball_speed_lin_weight: 1.0
-  ball_speed_ang_weight: 1.0
-  ball_height_above_plate: -50.0
-  ball_height_soft_threshold: 0.06
+  is_alive: 0.0
   ball_no_contact: -100.0
   ball_no_contact_dist: 0.0
-  pre_contact_action_rate_l2: -1.0
-  post_contact_action_rate_l2: -0.1
-  pre_contact_action_acc_l2: -0.15
-  post_contact_action_acc_l2: -0.02
-  pre_contact_joint_vel_l2: -0.02
-  post_contact_joint_vel_l2: -0.004
+  action_rate_l2: -1.0
+  action_acc_l2: -0.15
+  joint_vel_l2: -0.02
   joint_acc_l2: -0.001
   joint_torque_l2: -0.002
   joint_pos_limits: -5.0
   plate_drop_under_ball: -20.0
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12
-  pre_contact_racquet_ang_vel_l2: -80.0
-  racquet_ang_vel_std: 1.5
-  post_contact_racquet_ang_vel: 20.0
-  pre_contact_racquet_lin_vel_l2: -80.0
-  racquet_lin_vel_std: 0.3
-  post_contact_racquet_lin_vel: 20.0
+  racquet_ang_vel_l2: -80.0
+  racquet_lin_vel_l2: -80.0
   racquet_centering_std: 0.03
   racquet_orientation_centering_std: 0.2
-  pre_contact_racquet_centering: 800.0
-  post_contact_racquet_centering: 100.0
-  pre_contact_racquet_orientation_centering: 400.0
-  post_contact_racquet_orientation_centering: 50.0
+  racquet_centering: 100.0
+  racquet_orientation_centering: 50.0
 
 terminations:
   max_xy_radius: 0.16

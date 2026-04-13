@@ -623,41 +623,8 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
     rewards = params.rewards
     return {
         "is_alive": RewardTermCfg(func=mdp.is_alive, weight=rewards.is_alive),
-        "ball_centering": RewardTermCfg(
-            func=bb_mdp.ball_centering_contact_reward,
-            weight=rewards.ball_centering,
-            params={
-                "ball_name": "ball",
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-                "std": rewards.ball_centering_std,
-                "center_x": 0.0,
-                "center_y": 0.0,
-            },
-        ),
-        "ball_speed": RewardTermCfg(
-            func=bb_mdp.ball_speed_penalty,
-            weight=rewards.ball_speed,
-            params={
-                "ball_name": "ball",
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "lin_weight": rewards.ball_speed_lin_weight,
-                "ang_weight": rewards.ball_speed_ang_weight,
-            },
-        ),
-        "ball_height_above_plate": RewardTermCfg(
-            func=bb_mdp.ball_height_above_plate_penalty,
-            weight=rewards.ball_height_above_plate,
-            params={
-                "ball_name": "ball",
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "soft_height": rewards.ball_height_soft_threshold,
-            },
-        ),
         "ball_no_contact_penalty": RewardTermCfg(
-            func=bb_mdp.ball_no_contact_after_first_contact,
+            func=bb_mdp.ball_no_contact_mujoco,
             weight=rewards.ball_no_contact,
             params={
                 "ball_geom_name": "ball/ball_geom",
@@ -665,73 +632,18 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "max_contact_dist": rewards.ball_no_contact_dist,
             },
         ),
-        "pre_contact_action_rate_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_action_rate_l2,
-            params={
-                "term_func": mdp.action_rate_l2,
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
+        "action_rate_l2": RewardTermCfg(
+            func=mdp.action_rate_l2,
+            weight=rewards.action_rate_l2,
         ),
-        "post_contact_action_rate_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_action_rate_l2,
-            params={
-                "term_func": mdp.action_rate_l2,
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
+        "action_acc_l2": RewardTermCfg(
+            func=mdp.action_acc_l2,
+            weight=rewards.action_acc_l2,
         ),
-        "pre_contact_action_acc_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_action_acc_l2,
-            params={
-                "term_func": mdp.action_acc_l2,
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "post_contact_action_acc_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_action_acc_l2,
-            params={
-                "term_func": mdp.action_acc_l2,
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "pre_contact_joint_vel_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_joint_vel_l2,
-            params={
-                "term_func": mdp.joint_vel_l2,
-                "term_kwargs": {"asset_cfg": robot_joints_cfg()},
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "post_contact_joint_vel_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_joint_vel_l2,
-            params={
-                "term_func": mdp.joint_vel_l2,
-                "term_kwargs": {"asset_cfg": robot_joints_cfg()},
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
+        "joint_vel_l2": RewardTermCfg(
+            func=mdp.joint_vel_l2,
+            weight=rewards.joint_vel_l2,
+            params={"asset_cfg": robot_joints_cfg()},
         ),
         "joint_acc_l2": RewardTermCfg(
             func=mdp.joint_acc_l2,
@@ -758,118 +670,34 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "xy_radius": rewards.plate_drop_xy_radius,
             },
         ),
-        "racquet_lin_vel": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_racquet_lin_vel,
+        "racquet_lin_vel_l2": RewardTermCfg(
+            func=bb_mdp.racquet_lin_vel_l2,
+            weight=rewards.racquet_lin_vel_l2,
             params={
-                "term_func": bb_mdp.racquet_lin_vel_reward,
-                "term_kwargs": {
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                    "std": rewards.racquet_lin_vel_std,
-                },
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
+                "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
-        "pre_contact_racquet_lin_vel_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_racquet_lin_vel_l2,
+        "racquet_ang_vel_l2": RewardTermCfg(
+            func=bb_mdp.racquet_ang_vel_l2,
+            weight=rewards.racquet_ang_vel_l2,
             params={
-                "term_func": bb_mdp.racquet_lin_vel_l2,
-                "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "racquet_ang_vel": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_racquet_ang_vel,
-            params={
-                "term_func": bb_mdp.racquet_ang_vel_reward,
-                "term_kwargs": {
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                    "std": rewards.racquet_ang_vel_std,
-                },
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "pre_contact_racquet_ang_vel_l2": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_racquet_ang_vel_l2,
-            params={
-                "term_func": bb_mdp.racquet_ang_vel_l2,
-                "term_kwargs": {"plate_asset_cfg": racquet_frame_cfg()},
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
+                "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
         "racquet_centering": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_racquet_centering,
+            func=bb_mdp.racquet_centering_reward,
+            weight=rewards.racquet_centering,
             params={
-                "term_func": bb_mdp.racquet_centering_reward,
-                "term_kwargs": {
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                    "std": rewards.racquet_centering_std,
-                },
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "std": rewards.racquet_centering_std,
             },
         ),
         "racquet_orientation_centering": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.post_contact_racquet_orientation_centering,
+            func=bb_mdp.racquet_orientation_centering_reward,
+            weight=rewards.racquet_orientation_centering,
             params={
-                "term_func": bb_mdp.racquet_orientation_centering_reward,
-                "term_kwargs": {
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                    "std": rewards.racquet_orientation_centering_std,
-                },
-                "activate_after_contact": True,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "pre_contact_racquet_orientation_centering": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_racquet_orientation_centering,
-            params={
-                "term_func": bb_mdp.racquet_orientation_centering_reward,
-                "term_kwargs": {
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                    "std": rewards.racquet_orientation_centering_std,
-                },
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
-            },
-        ),
-        "pre_contact_racquet_centering": RewardTermCfg(
-            func=bb_mdp.contact_phase_reward,
-            weight=rewards.pre_contact_racquet_centering,
-            params={
-                "term_func": bb_mdp.racquet_centering_reward,
-                "term_kwargs": {
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                    "std": rewards.racquet_centering_std,
-                },
-                "activate_after_contact": False,
-                "ball_geom_name": "ball/ball_geom",
-                "racquet_geom_name": "robot/plate_collision",
-                "max_contact_dist": rewards.ball_no_contact_dist,
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "std": rewards.racquet_orientation_centering_std,
             },
         ),
     }

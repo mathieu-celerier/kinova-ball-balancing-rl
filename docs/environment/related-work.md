@@ -60,7 +60,7 @@ Why it matters:
 Relation to this repo:
 
 - the repo also treats the task as dynamic stabilization rather than static centering,
-- this is visible in the reward design where contact-gated `ball_centering` is paired with `ball_speed`,
+- this is visible in the reward design where support contact is enforced directly while racquet pose and motion regularization shape the behavior,
 - the simulation timing in `task_parameters.py` uses `timestep = 0.002` and `decimation = 5`, giving a `0.01 s` policy period, which is appropriate for contact-sensitive balancing.
 
 ### Awtar et al. (2002)
@@ -148,24 +148,19 @@ Compared with the papers above, this repository is not just minimizing ball posi
 
 From the configured rewards and terminations, it is optimizing for:
 
-- keeping the ball near the support center,
-- damping ball translation and rotation,
 - maintaining plate contact,
 - avoiding high robot aggressiveness,
 - staying near a local balancing posture rather than sweeping the arm through large excursions.
 
 This is visible in the parameterization:
 
-- `ball_centering = 200.0`
-- `ball_speed = -40.0`
 - `ball_no_contact = -100.0`
-- `ball_height_above_plate = -50.0`
 - `plate_drop_under_ball = -20.0`
-- `pre_contact_racquet_lin_vel_l2 = -80.0`
-- `pre_contact_racquet_centering = 800.0`
-- `post_contact_racquet_lin_vel = 20.0`
+- `racquet_lin_vel_l2 = -80.0`
+- `racquet_centering = 100.0`
+- `racquet_orientation_centering = 50.0`
 
-along with additional pre/post-contact racquet orientation terms plus penalties on action smoothness, joint velocity, acceleration, and torque proxies.
+along with penalties on action smoothness, joint velocity, acceleration, and torque proxies.
 
 ## Interpretation of the Current Parameters
 

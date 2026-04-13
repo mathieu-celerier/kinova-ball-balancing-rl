@@ -95,69 +95,35 @@ The code also stores the initial orientation reference, and the IK objective kee
 Positive terms:
 
 - `is_alive`: `+0.2`
-- `ball_centering`: `+200.0` in the default YAML
-- `pre_contact_racquet_centering`: exponential reward toward the nominal racquet position
-- `post_contact_racquet_centering`: weaker version of the same term after first contact
-- `pre_contact_racquet_orientation_centering`: exponential reward toward the nominal racquet orientation
-- `post_contact_racquet_orientation_centering`: weaker version after first contact
-- `post_contact_racquet_lin_vel`: exponential reward for low racquet linear speed after contact
-- `post_contact_racquet_ang_vel`: exponential reward for low racquet angular speed after contact
+- `racquet_centering`: exponential reward toward the nominal racquet position
+- `racquet_orientation_centering`: exponential reward toward the nominal racquet orientation
 
 Negative terms:
 
-- `ball_speed`: `-40.0`
-- `ball_height_above_plate`: `-50.0`
 - `ball_no_contact_penalty`: `-100.0`
-- phase-gated action rate, action acceleration, and joint velocity penalties
+- action rate, action acceleration, and joint velocity penalties
 - `joint_acc_l2`
 - `joint_torque_l2`
 - `joint_pos_limits`
 - `plate_drop_under_ball`: `-20.0`
-- `pre_contact_racquet_ang_vel_l2`: strong pre-contact angular-speed penalty
-- `pre_contact_racquet_lin_vel_l2`: strong pre-contact linear-speed penalty
+- `racquet_ang_vel_l2`
+- `racquet_lin_vel_l2`
 
 ### Key Reward Intuition
 
-`ball_centering` rewards small radial distance in the plate frame, but only while ball-racquet contact is active:
-
-```text
-r_center = contact(ball, plate) * exp(-(dx^2 + dy^2) / std^2)
-```
-
-`ball_speed` penalizes both translation and spin:
-
-```text
-penalty_speed = ||v_ball^plate||^2 + ||omega_ball^plate||^2
-```
-
-This makes the task care about damping, not only recentering.
-
-`ball_height_above_plate` penalizes plate-frame height above a soft threshold before any termination is involved.
-
 `plate_drop_under_ball` penalizes moving the plate down along its own normal while the ball is still close above it. This specifically discourages the local-minimum strategy of letting the racquet fall away from the ball while preserving short-term XY centering.
 
-The racquet centering terms now use exponential shaping as well:
+The racquet centering terms use exponential shaping:
 
 ```text
 r_pos = exp(-||p_racquet - p_nominal||^2 / std_pos^2)
 r_ori = exp(-orientation_error / std_ori^2)
 ```
 
-These are phase-gated so the policy is pulled toward a catch-ready pose before contact and still weakly regularized toward that pose after contact.
-
-Post-contact racquet velocity also uses exponential shaping:
-
-```text
-r_v = exp(-||v_racquet||^2 / std_v^2)
-r_w = exp(-||omega_racquet||^2 / std_w^2)
-```
-
-The pre-contact velocity terms stay as L2 penalties because that phase benefits from stronger pressure against aggressive diving motions.
-
 This combination is deliberate:
 
 - `ball_no_contact_penalty` makes unsupported flight expensive,
-- contact-gated `ball_centering` prevents the agent from earning centering reward while the ball is no longer supported,
+- always-on racquet pose and motion terms keep the arm near a quiet local balancing posture,
 - `plate_drop_under_ball` discourages the racquet-drop local minimum.
 
 ## Terminations
