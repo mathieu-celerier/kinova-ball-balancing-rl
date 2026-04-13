@@ -19,54 +19,16 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - name: no_rand
-    presets: [zero_ball_reset_velocity, no_rand]
-    overrides: {}
-
-  - name: obs_noise_only
-    presets: [zero_ball_reset_velocity, obs_noise_only]
-    overrides: {}
-
-  - name: ball_reset_only
-    presets: [zero_ball_reset_velocity, ball_reset_only]
-    overrides: {}
-
-  - name: ball_reset_linear_velocity_only
-    presets: [ball_reset_linear_velocity_only]
-    overrides: {}
-
-  - name: ball_reset_angular_velocity_only
-    presets: [ball_reset_angular_velocity_only]
-    overrides: {}
-
-  - name: ball_properties_only
-    presets: [zero_ball_reset_velocity, ball_properties_only]
-    overrides: {}
-
-  - name: pd_gains_only
-    presets: [zero_ball_reset_velocity, pd_gains_only]
-    overrides: {}
-
-  - name: robot_model_only
-    presets: [zero_ball_reset_velocity, robot_model_only]
-    overrides: {}
-
-  - name: null_space_only
-    presets: [zero_ball_reset_velocity, null_space_only]
-    overrides: {}
-
-  - name: no_model_rand
-    presets: [zero_ball_reset_velocity, no_model_rand]
-    overrides: {}
-
-  - name: all_except_null_space_and_robot_model
-    presets: [zero_ball_reset_velocity, all_except_null_space_and_robot_model]
-    overrides: {}
-
-  - name: all_except_robot_model
-    presets: [zero_ball_reset_velocity, all_except_robot_model]
-    overrides: {}
-
-  - name: all_randomization
-    presets: [zero_ball_reset_velocity, all_randomization]
-    overrides: {}
+  - joint_randomization_ablation/no_rand.yaml
+  - joint_randomization_ablation/obs_noise_only.yaml
+  - joint_randomization_ablation/ball_reset_only.yaml
+  - joint_randomization_ablation/ball_reset_linear_velocity_only.yaml
+  - joint_randomization_ablation/ball_reset_angular_velocity_only.yaml
+  - joint_randomization_ablation/ball_properties_only.yaml
+  - joint_randomization_ablation/pd_gains_only.yaml
+  - joint_randomization_ablation/robot_model_only.yaml
+  - joint_randomization_ablation/null_space_only.yaml
+  - joint_randomization_ablation/no_model_rand.yaml
+  - joint_randomization_ablation/all_except_null_space_and_robot_model.yaml
+  - joint_randomization_ablation/all_except_robot_model.yaml
+  - joint_randomization_ablation/all_randomization.yaml

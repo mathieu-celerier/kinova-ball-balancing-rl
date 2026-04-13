@@ -105,6 +105,30 @@ def _load_training_set(path: Path) -> dict[str, Any]:
     return config
 
 
+def _resolve_run_cfg(
+    run_cfg: dict[str, Any] | str,
+    *,
+    index: int,
+    relative_to: Path,
+) -> dict[str, Any]:
+    if isinstance(run_cfg, dict):
+        return run_cfg
+    if not isinstance(run_cfg, str):
+        raise TypeError(f"Run #{index + 1} must be a mapping or path string, got {type(run_cfg).__name__}")
+
+    run_path = _resolve_path(run_cfg, relative_to=relative_to)
+    referenced_cfg = _load_training_set(run_path)
+    referenced_runs = referenced_cfg["runs"]
+    if len(referenced_runs) != 1:
+        raise ValueError(
+            f"Referenced run config {run_path} must contain exactly one run, got {len(referenced_runs)}"
+        )
+    referenced_run = referenced_runs[0]
+    if not isinstance(referenced_run, dict):
+        raise TypeError(f"Referenced run in {run_path} must be a mapping")
+    return referenced_run
+
+
 def _base_parameters(training_set_cfg: dict[str, Any], *, training_set_path: Path):
     base_config = training_set_cfg.get("base_config")
     if base_config is None:
@@ -296,6 +320,11 @@ def main() -> int:
     )
 
     for index, raw_run_cfg in enumerate(training_set_cfg["runs"]):
+        raw_run_cfg = _resolve_run_cfg(
+            raw_run_cfg,
+            index=index,
+            relative_to=training_set_path.parent,
+        )
         run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
         if selected_runs and run_name not in selected_runs:
             continue

@@ -16,6 +16,7 @@ from mjlab_kinova.train_set import (
     _merge_override_mappings,
     _normalize_run,
     _normalize_stop_policy,
+    _resolve_run_cfg,
     _timestamped_project_name,
     _train_command,
     _wandb_run_id,
@@ -310,6 +311,11 @@ def main() -> int:
     configured_runs: list[tuple[str, list[str], dict[str, Any], dict[str, Any]]] = []
     configured_run_names: list[str] = []
     for index, raw_run_cfg in enumerate(training_set_cfg["runs"]):
+        raw_run_cfg = _resolve_run_cfg(
+            raw_run_cfg,
+            index=index,
+            relative_to=training_set_path.parent,
+        )
         run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
         configured_runs.append((run_name, preset_refs, overrides, raw_run_cfg))
         configured_run_names.append(run_name)
