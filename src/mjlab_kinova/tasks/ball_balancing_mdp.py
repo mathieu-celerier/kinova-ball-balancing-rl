@@ -61,6 +61,23 @@ def _format_debug_bool(name: str, value: bool) -> str:
     return f"{name}={'True' if value else 'False'}"
 
 
+def _ensure_ball_release_state(env: "ManagerBasedRlEnv") -> None:
+    if hasattr(env, "_ball_release_pending"):
+        return
+    env._ball_release_pending = torch.zeros(
+        env.num_envs, device=env.device, dtype=torch.bool
+    )
+    env._ball_release_steps_remaining = torch.zeros(
+        env.num_envs, device=env.device, dtype=torch.long
+    )
+    env._ball_release_offset_plate = torch.zeros(
+        env.num_envs, 3, device=env.device, dtype=torch.float32
+    )
+    env._ball_release_velocity_w = torch.zeros(
+        env.num_envs, 6, device=env.device, dtype=torch.float32
+    )
+
+
 def mark_reset_debug_pending(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -122,6 +139,8 @@ def log_first_step_after_reset(
     below_racquet = ball_pos_plate[:, 2] < -0.06
     on_floor = ball_pos_w[:, 2] < 0.05
     fell_off = torch.logical_or(radial_xy > 0.16, torch.logical_or(below_racquet, on_floor))
+    release_pending = getattr(env, "_ball_release_pending", None)
+    release_steps_remaining = getattr(env, "_ball_release_steps_remaining", None)
 
     for env_id in pending.tolist():
         msg = (
@@ -144,6 +163,11 @@ def log_first_step_after_reset(
             f"ee_ft_raw={_format_debug_vec(raw_wrench[env_id])} "
             f"ee_ft_bias={_format_debug_vec(bias_wrench[env_id])}"
         )
+        if release_pending is not None and release_steps_remaining is not None:
+            msg += (
+                f" {_format_debug_bool('release_pending', bool(release_pending[env_id].item()))}"
+                f" release_steps_remaining={int(release_steps_remaining[env_id].item())}"
+            )
         if processed_actions is not None:
             msg += (
                 f" processed_action={_format_debug_vec(processed_actions[env_id])}"
@@ -1410,6 +1434,7 @@ def reset_ball_on_plate(
     y_offset: float = 0.0,
     racquet_x_radius: float | None = None,
     racquet_y_radius: float | None = None,
+    release_delay_s: tuple[float, float] = (0.0, 0.0),
     lin_vel_x_range: tuple[float, float] = (0.0, 0.0),
     lin_vel_y_range: tuple[float, float] = (0.0, 0.0),
     lin_vel_z_range: tuple[float, float] = (0.0, 0.0),
@@ -1424,6 +1449,7 @@ def reset_ball_on_plate(
 
     robot: Entity = env.scene[plate_asset_cfg.name]
     ball: Entity = env.scene[ball_name]
+    _ensure_ball_release_state(env)
 
     plate_pos_w = robot.data.body_link_pos_w[env_ids][
         :, plate_asset_cfg.body_ids
@@ -1495,8 +1521,26 @@ def reset_ball_on_plate(
         dim=-1,
     )
 
+    release_delay = sample_uniform(
+        release_delay_s[0],
+        release_delay_s[1],
+        (len(env_ids),),
+        device=env.device,
+    )
+    release_delay_steps = torch.ceil(release_delay / env.step_dt).to(dtype=torch.long)
+    held_vel = torch.zeros_like(vel)
+    pose_vel = torch.where(
+        (release_delay_steps > 0).unsqueeze(-1),
+        held_vel,
+        vel,
+    )
+
     ball.write_root_link_pose_to_sim(pose, env_ids=env_ids)
-    ball.write_root_link_velocity_to_sim(vel, env_ids=env_ids)
+    ball.write_root_link_velocity_to_sim(pose_vel, env_ids=env_ids)
+    env._ball_release_pending[env_ids] = release_delay_steps > 0
+    env._ball_release_steps_remaining[env_ids] = release_delay_steps
+    env._ball_release_offset_plate[env_ids] = offset_plate
+    env._ball_release_velocity_w[env_ids] = vel
     mark_reset_debug_pending(env, env_ids)
 
     if _reset_debug_enabled():
@@ -1519,14 +1563,70 @@ def reset_ball_on_plate(
                 f"pre_ball_vel_plate={_format_debug_vec(pre_ball_vel_plate[idx])} "
                 f"target_offset_plate={_format_debug_vec(offset_plate[idx])} "
                 f"target_ball_pos_w={_format_debug_vec(ball_pos_w[idx])} "
-                f"written_vel_w={_format_debug_vec(vel[idx])} "
+                f"written_vel_w={_format_debug_vec(pose_vel[idx])} "
+                f"release_vel_w={_format_debug_vec(vel[idx])} "
+                f"release_delay_s={float(release_delay[idx].item()):.4f} "
+                f"release_delay_steps={int(release_delay_steps[idx].item())} "
                 f"actual_ball_pos_w={_format_debug_vec(actual_ball_pos_w[idx])} "
                 f"ball_plate={_format_debug_vec(ball_pos_plate[env_id])} "
                 f"ball_vel_plate={_format_debug_vec(ball_vel_plate[env_id])} "
                 f"ball_radial_xy={float(radial_xy[idx].item()):.4f} "
                 f"{_format_debug_bool('below_racquet', bool(below_racquet[idx].item()))} "
-                f"{_format_debug_bool('ball_on_floor', bool(on_floor[idx].item()))}"
+                f"{_format_debug_bool('ball_on_floor', bool(on_floor[idx].item()))} "
+                f"{_format_debug_bool('release_pending', bool(env._ball_release_pending[env_id].item()))}"
             )
+
+
+def update_ball_release(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+) -> None:
+    """Keep the ball suspended above the plate until its randomized release step."""
+    del env_ids
+    if not hasattr(env, "_ball_release_pending"):
+        return
+
+    pending = torch.nonzero(env._ball_release_pending, as_tuple=False).squeeze(-1)
+    if pending.numel() == 0:
+        return
+
+    robot: Entity = env.scene[plate_asset_cfg.name]
+    ball: Entity = env.scene[ball_name]
+
+    hold_ids = pending[env._ball_release_steps_remaining[pending] > 0]
+    release_ids = pending[env._ball_release_steps_remaining[pending] == 0]
+
+    if hold_ids.numel() > 0:
+        plate_pos_w = robot.data.body_link_pos_w[hold_ids][:, plate_asset_cfg.body_ids].squeeze(1)
+        plate_quat_w = robot.data.body_link_quat_w[hold_ids][:, plate_asset_cfg.body_ids].squeeze(1)
+        offset_plate = env._ball_release_offset_plate[hold_ids].to(dtype=plate_pos_w.dtype)
+        hold_pos_w = plate_pos_w + quat_apply(plate_quat_w, offset_plate)
+        quat_w = torch.zeros((len(hold_ids), 4), device=env.device, dtype=plate_pos_w.dtype)
+        quat_w[:, 0] = 1.0
+        pose = torch.cat((hold_pos_w, quat_w), dim=-1)
+        vel = torch.zeros((len(hold_ids), 6), device=env.device, dtype=plate_pos_w.dtype)
+        ball.write_root_link_pose_to_sim(pose, env_ids=hold_ids)
+        ball.write_root_link_velocity_to_sim(vel, env_ids=hold_ids)
+        env._ball_release_steps_remaining[hold_ids] -= 1
+
+    if release_ids.numel() > 0:
+        release_vel_w = env._ball_release_velocity_w[release_ids]
+        ball.write_root_link_velocity_to_sim(release_vel_w, env_ids=release_ids)
+        env._ball_release_pending[release_ids] = False
+        if _reset_debug_enabled():
+            for env_id in release_ids.tolist():
+                print(
+                    "[RESET_DEBUG][BALL_RELEASE] "
+                    f"env={env_id} "
+                    f"episode={int(env._reset_debug_episode_id[env_id].item())} "
+                    f"step={int(env.episode_length_buf[env_id].item())} "
+                    f"release_vel_w={_format_debug_vec(env._ball_release_velocity_w[env_id])}"
+                )
+
+    if hold_ids.numel() > 0 or release_ids.numel() > 0:
+        env.sim.forward()
 
 
 def kick_ball_velocity(

@@ -71,6 +71,7 @@ class BallResetParameters:
     z_offset: float = 0.05
     x_offset: float = 0.0
     y_offset: float = 0.0
+    release_delay_s: tuple[float, float] = (0.0, 0.25)
     linear_velocity: Vec3Ranges = field(
         default_factory=lambda: Vec3Ranges(
             x=(-0.25, 0.25),

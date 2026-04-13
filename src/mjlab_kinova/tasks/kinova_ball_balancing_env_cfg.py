@@ -538,10 +538,19 @@ def _events_cfg(
                 "z_offset": ball_reset.z_offset,
                 "x_offset": ball_reset.x_offset,
                 "y_offset": ball_reset.y_offset,
+                "release_delay_s": ball_reset.release_delay_s,
                 "lin_vel_x_range": ball_lin_vel_x_range,
                 "lin_vel_y_range": ball_lin_vel_y_range,
                 "lin_vel_z_range": ball_lin_vel_z_range,
                 "ang_vel_range": ball_ang_vel_range,
+            },
+        ),
+        "update_ball_release": EventTermCfg(
+            func=bb_mdp.update_ball_release,
+            mode="step",
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
         "log_first_step_after_reset": EventTermCfg(
