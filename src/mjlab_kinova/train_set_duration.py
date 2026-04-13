@@ -16,6 +16,7 @@ from mjlab_kinova.train_set import (
     _merge_override_mappings,
     _normalize_run,
     _normalize_stop_policy,
+    _timestamped_project_name,
     _train_command,
     _wandb_run_id,
     _write_temp_params,
@@ -299,7 +300,7 @@ def main() -> int:
     args = _parse_args()
     training_set_path = Path(args.training_set).resolve()
     training_set_cfg = _load_training_set(training_set_path)
-    training_set_name = training_set_path.stem
+    training_set_name = _timestamped_project_name(training_set_path.stem)
     base_params = _base_parameters(training_set_cfg, training_set_path=training_set_path)
     selected_runs = set(args.run_names)
     default_stop_policy = training_set_cfg.get(

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from datetime import datetime
 import json
 import os
 import re
@@ -271,11 +272,16 @@ def _train_command(*, variant: str, extra_args: list[str], require_executable: b
     return [train_exe, TASK_ID_BY_VARIANT[variant], *extra_args]
 
 
+def _timestamped_project_name(base_name: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return f"{base_name}_{timestamp}"
+
+
 def main() -> int:
     args, extra_train_args = _parse_args()
     training_set_path = Path(args.training_set).resolve()
     training_set_cfg = _load_training_set(training_set_path)
-    training_set_name = training_set_path.stem
+    training_set_name = _timestamped_project_name(training_set_path.stem)
     base_params = _base_parameters(training_set_cfg, training_set_path=training_set_path)
 
     if extra_train_args and extra_train_args[0] == "--":
