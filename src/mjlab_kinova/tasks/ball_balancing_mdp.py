@@ -676,6 +676,16 @@ def racquet_lin_vel_l2(
     return torch.sum(torch.square(plate_vel_w), dim=-1)
 
 
+def racquet_lin_vel_reward(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+    std: float,
+) -> torch.Tensor:
+    """Reward for keeping racquet linear velocity near zero."""
+    lin_vel_l2 = racquet_lin_vel_l2(env=env, plate_asset_cfg=plate_asset_cfg)
+    return torch.exp(-lin_vel_l2 / (std**2))
+
+
 def racquet_ang_vel_l2(
     env: "ManagerBasedRlEnv",
     plate_asset_cfg: SceneEntityCfg,
@@ -683,6 +693,16 @@ def racquet_ang_vel_l2(
     """Penalty on squared racquet (plate body) angular speed in world frame."""
     plate_ang_vel_w = body_angular_velocity_w(env, plate_asset_cfg)
     return torch.sum(torch.square(plate_ang_vel_w), dim=-1)
+
+
+def racquet_ang_vel_reward(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+    std: float,
+) -> torch.Tensor:
+    """Reward for keeping racquet angular velocity near zero."""
+    ang_vel_l2 = racquet_ang_vel_l2(env=env, plate_asset_cfg=plate_asset_cfg)
+    return torch.exp(-ang_vel_l2 / (std**2))
 
 
 def racquet_dist_from_initial_l2(
@@ -701,6 +721,25 @@ def racquet_dist_from_initial_l2(
 
     nominal_pos_w = env._racquet_nominal_pos_w
     return torch.sum(torch.square(plate_pos_w - nominal_pos_w), dim=-1)
+
+
+def racquet_centering_reward(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+    std: float,
+) -> torch.Tensor:
+    """Reward for keeping the racquet position near its nominal home pose."""
+    if not hasattr(env, "_racquet_nominal_pos_w"):
+        env._racquet_nominal_pos_w = _compute_nominal_racquet_pos_w(
+            env=env,
+            plate_asset_cfg=plate_asset_cfg,
+        )
+
+    robot: Entity = env.scene[plate_asset_cfg.name]
+    plate_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1)
+    nominal_pos_w = env._racquet_nominal_pos_w
+    pos_error_sq = torch.sum(torch.square(plate_pos_w - nominal_pos_w), dim=-1)
+    return torch.exp(-pos_error_sq / (std**2))
 
 
 def racquet_ori_dist_from_initial_l2(
@@ -724,6 +763,19 @@ def racquet_ori_dist_from_initial_l2(
     ).clamp(min=1.0e-8)
     alignment = torch.sum(plate_quat_w * nominal_quat_w, dim=-1).abs().clamp(max=1.0)
     return 1.0 - torch.square(alignment)
+
+
+def racquet_orientation_centering_reward(
+    env: "ManagerBasedRlEnv",
+    plate_asset_cfg: SceneEntityCfg,
+    std: float,
+) -> torch.Tensor:
+    """Reward for keeping the racquet orientation near its nominal home pose."""
+    ori_error = racquet_ori_dist_from_initial_l2(
+        env=env,
+        plate_asset_cfg=plate_asset_cfg,
+    )
+    return torch.exp(-ori_error / (std**2))
 
 
 def _compute_nominal_racquet_pos_w(

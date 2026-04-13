@@ -82,13 +82,17 @@ rewards:
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12
   pre_contact_racquet_ang_vel_l2: -80.0
-  post_contact_racquet_ang_vel_l2: -20.0
+  racquet_ang_vel_std: 1.5
+  post_contact_racquet_ang_vel: 20.0
   pre_contact_racquet_lin_vel_l2: -80.0
-  post_contact_racquet_lin_vel_l2: -20.0
-  pre_contact_racquet_ori_dist_from_initial_l2: -800.0
-  post_contact_racquet_ori_dist_from_initial_l2: -100.0
-  pre_contact_racquet_dist_from_initial_l2: -800.0
-  post_contact_racquet_dist_from_initial_l2: -100.0
+  racquet_lin_vel_std: 0.3
+  post_contact_racquet_lin_vel: 20.0
+  racquet_centering_std: 0.03
+  racquet_orientation_centering_std: 0.2
+  pre_contact_racquet_centering: 800.0
+  post_contact_racquet_centering: 100.0
+  pre_contact_racquet_orientation_centering: 400.0
+  post_contact_racquet_orientation_centering: 50.0
 
 terminations:
   max_xy_radius: 0.16
@@ -105,15 +109,15 @@ simulation:
   nconmax: 256
   njmax: 1024
   decimation: 10
-  episode_length_s: 15.0
+  episode_length_s: 10.0
   play_episode_length_s: 1000000000
   viewer_distance: 0.9
   viewer_elevation: -35.0
   viewer_azimuth: 110.0
 
 ppo:
-  actor_hidden_dims: [64, 64]
-  critic_hidden_dims: [64, 64]
+  actor_hidden_dims: [256, 128, 64]
+  critic_hidden_dims: [256, 128, 64]
   activation: elu
   init_noise_std: 1.0
   value_loss_coef: 1.0

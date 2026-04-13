@@ -130,13 +130,17 @@ class RewardParameters:
     plate_drop_ball_height_threshold: float = 0.01
     plate_drop_xy_radius: float = 0.12
     pre_contact_racquet_ang_vel_l2: float = -20.0
-    post_contact_racquet_ang_vel_l2: float = -5.0
+    racquet_ang_vel_std: float = 1.5
+    post_contact_racquet_ang_vel: float = 5.0
     pre_contact_racquet_lin_vel_l2: float = -80.0
-    post_contact_racquet_lin_vel_l2: float = -20.0
-    pre_contact_racquet_ori_dist_from_initial_l2: float = -200.0
-    post_contact_racquet_ori_dist_from_initial_l2: float = -50.0
-    pre_contact_racquet_dist_from_initial_l2: float = -800.0
-    post_contact_racquet_dist_from_initial_l2: float = -120.0
+    racquet_lin_vel_std: float = 0.3
+    post_contact_racquet_lin_vel: float = 20.0
+    racquet_centering_std: float = 0.08
+    racquet_orientation_centering_std: float = 0.2
+    pre_contact_racquet_centering: float = 80.0
+    post_contact_racquet_centering: float = 20.0
+    pre_contact_racquet_orientation_centering: float = 40.0
+    post_contact_racquet_orientation_centering: float = 10.0
 
 
 @dataclass(frozen=True)
