@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from mjlab_kinova.train_set import (
@@ -36,6 +37,11 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
     )
     args, train_args = parser.parse_known_args()
     return args, train_args
+
+
+def _timestamped_wandb_run_id(run_name: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    return _wandb_run_id(f"{run_name}_{timestamp}")
 
 
 def main() -> int:
@@ -98,7 +104,7 @@ def main() -> int:
     env["MJLAB_KINOVA_TASK_PARAMS"] = temp_config_path
     env["WANDB_PROJECT"] = project_name
     env["WANDB_NAME"] = run_name
-    env["WANDB_RUN_ID"] = _wandb_run_id(run_name)
+    env["WANDB_RUN_ID"] = _timestamped_wandb_run_id(run_name)
     if stop_policy is not None:
         env["MJLAB_KINOVA_STOP_CONDITION"] = json.dumps(stop_policy)
     else:
