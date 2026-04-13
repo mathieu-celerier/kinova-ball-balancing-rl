@@ -2,7 +2,7 @@ variant: joint
 base_config: ../../task_parameters.yaml
 default_stop_policy:
   min_iterations: 5000
-  max_iterations: 10000
+  max_iterations: 30000
   combine: all
   criteria:
     - metric: Train/mean_episode_length
