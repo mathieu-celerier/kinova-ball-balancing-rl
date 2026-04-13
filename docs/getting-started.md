@@ -52,6 +52,21 @@ Batch runs for one variant are defined under `config/training_sets/` and launche
 uv run kinova-train-set config/training_sets/joint_ablation.yaml -- --env.scene.num-envs 512
 ```
 
+To launch only selected runs from a larger set:
+
+```bash
+uv run kinova-train-set config/training_sets/joint_randomization_ablation.yaml \
+  --run ball_reset_only \
+  -- --env.scene.num-envs 1 --agent.max_iterations 20
+```
+
+For extracted single-run configs under `config/training_sets/joint_randomization_ablation/`, use:
+
+```bash
+uv run kinova-train-run config/training_sets/joint_randomization_ablation/ball_reset_only.yaml \
+  -- --env.scene.num-envs 1 --agent.max_iterations 20
+```
+
 To estimate per-run and whole-set min/max duration bounds without launching training:
 
 ```bash
@@ -73,9 +88,15 @@ That launcher merges:
 
 For W&B-backed launches from `kinova-train-set`:
 
-- the training-set file stem becomes the W&B project name
+- the training-set file stem becomes the W&B project name with a `YYYYMMDD_HHMMSS` suffix
 - the YAML `runs[].name` becomes the run display name
 - a W&B-compatible run ID is derived from `runs[].name`
+
+For `kinova-train-run`:
+
+- `WANDB_PROJECT` is fixed to `kinova_ping_pong`
+- the single-run name becomes the W&B display name
+- the W&B-compatible run ID is still derived from the run name
 
 Any arguments after `--` are forwarded to the underlying `train` command for every run in the set. This is the easiest way to apply a common CLI override such as:
 
@@ -95,6 +116,21 @@ uv run train Mjlab-BallBalancing-Kinova-BaselineNoRand --env.scene.num-envs 512
 ```bash
 uv run play Mjlab-BallBalancing-Kinova \
   --checkpoint-file logs/rsl_rl/kinova_ball_balancing_joint/.../model_*.pt
+```
+
+To resolve play parameters from a named run inside a training set:
+
+```bash
+uv run kinova-play-set config/training_sets/joint_randomization_ablation.yaml \
+  --run ball_reset_only \
+  -- --agent random --num-envs 1 --viewer native
+```
+
+To resolve play parameters from one extracted single-run config:
+
+```bash
+uv run kinova-play-run config/training_sets/joint_randomization_ablation/ball_reset_only.yaml \
+  -- --agent random --num-envs 1 --viewer native
 ```
 
 ## GPU Fallback
@@ -146,6 +182,10 @@ Preset YAMLs live in:
 Training-set batch definitions live in:
 
 - `config/training_sets/`
+
+Extracted one-run configs for direct `kinova-train-run` / `kinova-play-run` use live in:
+
+- `config/training_sets/joint_randomization_ablation/`
 
 The registered tasks now load that YAML automatically at import time. To point the task registry to a different file, set:
 
@@ -200,6 +240,8 @@ runs:
 ```
 
 `global_overrides` applies to every run in the set after the base config is loaded and before presets or per-run overrides are merged.
+
+The `runs:` list can also contain string references to other training-set YAML files, as long as each referenced file contains exactly one run. `config/training_sets/joint_randomization_ablation.yaml` uses this pattern to point at the extracted one-run configs.
 
 Each training set can declare a default stop policy, and each run can override it:
 

@@ -17,6 +17,8 @@ The canonical control-space variants are:
 
 Joint-space ablations such as "no model randomization" and "no randomization" are now handled through preset YAMLs in [`config/presets/`](./config/presets) and batch training-set files in [`config/training_sets/`](./config/training_sets).
 
+Single-run copies of the joint randomization ablations live in [`config/training_sets/joint_randomization_ablation/`](./config/training_sets/joint_randomization_ablation).
+
 Main pages:
 
 - [Home](./docs/index.md)
@@ -55,6 +57,13 @@ To launch a set of runs for one variant:
 uv run kinova-train-set config/training_sets/joint_ablation.yaml -- --env.scene.num-envs 512
 ```
 
+To launch one extracted run cleanly:
+
+```bash
+uv run kinova-train-run config/training_sets/joint_randomization_ablation/ball_reset_only.yaml \
+  -- --env.scene.num-envs 512
+```
+
 To estimate per-run and whole-set min/max duration bounds:
 
 ```bash
@@ -67,9 +76,15 @@ Arguments after `--` are forwarded to the underlying `train` command for every r
 
 For W&B-backed launches from `kinova-train-set`:
 
-- the training-set file stem becomes the W&B project name
+- the training-set file stem becomes the W&B project name, with a `YYYYMMDD_HHMMSS` suffix added per invocation
 - the YAML `runs[].name` becomes the run display name
 - a W&B-compatible run ID is derived from `runs[].name` and exported to the training process
+
+For `kinova-train-run`:
+
+- `WANDB_PROJECT` is fixed to `kinova_ping_pong`
+- the single run name becomes `WANDB_NAME`
+- the W&B run ID is derived from that run name
 
 Each training set can declare a metric-based `default_stop_policy`, and each run can override it with its own `stop_policy`, including multiple criteria plus explicit `min_iterations` and `max_iterations`.
 
@@ -78,6 +93,21 @@ Each training set can declare a metric-based `default_stop_policy`, and each run
 ```bash
 uv run play Mjlab-BallBalancing-Kinova \
   --checkpoint-file logs/rsl_rl/kinova_ball_balancing_joint/.../model_*.pt
+```
+
+To play from a training-set entry:
+
+```bash
+uv run kinova-play-set config/training_sets/joint_randomization_ablation.yaml \
+  --run ball_reset_only \
+  -- --agent random --num-envs 1 --viewer native
+```
+
+To play from one extracted run config directly:
+
+```bash
+uv run kinova-play-run config/training_sets/joint_randomization_ablation/ball_reset_only.yaml \
+  -- --agent random --num-envs 1 --viewer native
 ```
 
 ## Serve the Docs

@@ -55,6 +55,31 @@ The default values are also exposed as YAML in `config/task_parameters.yaml`.
 
 Layered overrides from preset files and training-set launches are merged through the same module.
 
+## `src/mjlab_kinova/train_set.py`
+
+Launches multi-run experiment sets from `config/training_sets/`.
+
+It is responsible for:
+
+- loading the base config and global overrides
+- resolving preset stacks and per-run overrides
+- supporting `runs:` entries that point to extracted one-run YAML files
+- generating timestamped W&B project names for set launches
+
+## `src/mjlab_kinova/train_run.py`
+
+Launches one extracted run config directly.
+
+It reuses the same merge and stop-policy logic as `train_set.py`, but expects exactly one run and fixes the W&B project name to `kinova_ping_pong`.
+
+## `src/mjlab_kinova/play_set.py`
+
+Launches `play` by resolving parameters from a named run inside a training-set file.
+
+## `src/mjlab_kinova/play_run.py`
+
+Launches `play` directly from an extracted one-run config without needing `--run`.
+
 ## `src/mjlab_kinova/robot/kinova_constants.py`
 
 Defines:

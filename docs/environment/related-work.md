@@ -156,15 +156,16 @@ From the configured rewards and terminations, it is optimizing for:
 
 This is visible in the parameterization:
 
-- `ball_centering = 40.0`
-- `ball_speed = -8.0`
-- `ball_no_contact = -18.0`
+- `ball_centering = 200.0`
+- `ball_speed = -40.0`
+- `ball_no_contact = -100.0`
 - `ball_height_above_plate = -50.0`
-- `plate_drop_under_ball = -2.0`
-- `racquet_lin_vel_l2 = -5.0`
-- `racquet_dist_from_initial_l2 = -30.0`
+- `plate_drop_under_ball = -20.0`
+- `pre_contact_racquet_lin_vel_l2 = -80.0`
+- `pre_contact_racquet_centering = 800.0`
+- `post_contact_racquet_lin_vel = 20.0`
 
-along with additional penalties on action smoothness, joint velocity, acceleration, and torque proxies.
+along with additional pre/post-contact racquet orientation terms plus penalties on action smoothness, joint velocity, acceleration, and torque proxies.
 
 ## Interpretation of the Current Parameters
 

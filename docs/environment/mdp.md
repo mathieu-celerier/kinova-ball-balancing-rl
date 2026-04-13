@@ -64,8 +64,13 @@ Training noise is injected into actor observations:
 
 The joint-space variant uses `JointPositionActionCfg` over all joints with:
 
-- scale `0.13`
+- per-joint scales derived from Kinova actuator limits using `0.25 * effort_limit / stiffness`
 - default offsets enabled
+
+The resulting action scales are:
+
+- `joint_1` to `joint_4`: `0.59375`
+- `joint_5` to `joint_7`: `0.75`
 
 ### Cartesian Variant
 
@@ -90,24 +95,26 @@ The code also stores the initial orientation reference, and the IK objective kee
 Positive terms:
 
 - `is_alive`: `+0.2`
-- `ball_centering`: `+40.0`
+- `ball_centering`: `+200.0` in the default YAML
+- `pre_contact_racquet_centering`: exponential reward toward the nominal racquet position
+- `post_contact_racquet_centering`: weaker version of the same term after first contact
+- `pre_contact_racquet_orientation_centering`: exponential reward toward the nominal racquet orientation
+- `post_contact_racquet_orientation_centering`: weaker version after first contact
+- `post_contact_racquet_lin_vel`: exponential reward for low racquet linear speed after contact
+- `post_contact_racquet_ang_vel`: exponential reward for low racquet angular speed after contact
 
 Negative terms:
 
-- `ball_speed`: `-8.0`
+- `ball_speed`: `-40.0`
 - `ball_height_above_plate`: `-50.0`
-- `ball_no_contact_penalty`: `-18.0`
-- `action_rate_l2`: `-0.01`
-- `action_acc_l2`: `-0.0015`
-- `joint_vel_l2`: `-0.0005`
-- `joint_acc_l2`: `-0.0001`
-- `joint_torque_l2`: `-0.0002`
-- `joint_pos_limits`: `-0.2`
-- `plate_drop_under_ball`: `-2.0`
-- `racquet_ang_vel_l2`: angular-speed regularization on the racquet
-- `racquet_lin_vel_l2`: `-5.0`
-- `racquet_ori_dist_from_initial_l2`: orientation deviation from the nominal racquet pose
-- `racquet_dist_from_initial_l2`: `-30.0`
+- `ball_no_contact_penalty`: `-100.0`
+- phase-gated action rate, action acceleration, and joint velocity penalties
+- `joint_acc_l2`
+- `joint_torque_l2`
+- `joint_pos_limits`
+- `plate_drop_under_ball`: `-20.0`
+- `pre_contact_racquet_ang_vel_l2`: strong pre-contact angular-speed penalty
+- `pre_contact_racquet_lin_vel_l2`: strong pre-contact linear-speed penalty
 
 ### Key Reward Intuition
 
@@ -128,6 +135,24 @@ This makes the task care about damping, not only recentering.
 `ball_height_above_plate` penalizes plate-frame height above a soft threshold before any termination is involved.
 
 `plate_drop_under_ball` penalizes moving the plate down along its own normal while the ball is still close above it. This specifically discourages the local-minimum strategy of letting the racquet fall away from the ball while preserving short-term XY centering.
+
+The racquet centering terms now use exponential shaping as well:
+
+```text
+r_pos = exp(-||p_racquet - p_nominal||^2 / std_pos^2)
+r_ori = exp(-orientation_error / std_ori^2)
+```
+
+These are phase-gated so the policy is pulled toward a catch-ready pose before contact and still weakly regularized toward that pose after contact.
+
+Post-contact racquet velocity also uses exponential shaping:
+
+```text
+r_v = exp(-||v_racquet||^2 / std_v^2)
+r_w = exp(-||omega_racquet||^2 / std_w^2)
+```
+
+The pre-contact velocity terms stay as L2 penalties because that phase benefits from stronger pressure against aggressive diving motions.
 
 This combination is deliberate:
 
@@ -175,10 +200,19 @@ The default training behavior for the joint-space variant includes:
 
 - ball XY reset in `[-0.02, 0.02] m`
 - ball Z offset `0.05 m`
+- ball release delay in `[0.0, 0.25] s`
 - randomized initial ball linear and angular velocity
 - ball mass scaling in `[0.7, 1.3]`
 - PD gain scaling in `[0.95, 1.05]`
 - robot inertial randomization in `[0.9, 1.1]` for selected fields
+
+The reset now behaves as a suspended drop rather than an immediate free-fall at reset:
+
+- the ball is positioned above the racquet at reset
+- a per-environment release delay is sampled
+- the robot is free to move during that delay
+- the ball is held relative to the racquet until release
+- after release, gravity and the sampled reset velocity take over
 
 During training only, the ball also receives interval velocity kicks every `0.4-1.0 s`.
 
