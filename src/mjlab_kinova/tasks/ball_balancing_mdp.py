@@ -57,6 +57,10 @@ def _format_debug_vec(vec: torch.Tensor, precision: int = 4) -> str:
     return "[" + ", ".join(f"{float(v):.{precision}f}" for v in values) + "]"
 
 
+def _format_debug_bool(name: str, value: bool) -> str:
+    return f"{name}={'True' if value else 'False'}"
+
+
 def mark_reset_debug_pending(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -114,6 +118,10 @@ def log_first_step_after_reset(
     except Exception:
         joint_term = None
     processed_actions = getattr(joint_term, "_processed_actions", None)
+    radial_xy = torch.linalg.norm(ball_pos_plate[:, :2], dim=-1)
+    below_racquet = ball_pos_plate[:, 2] < -0.06
+    on_floor = ball_pos_w[:, 2] < 0.05
+    fell_off = torch.logical_or(radial_xy > 0.16, torch.logical_or(below_racquet, on_floor))
 
     for env_id in pending.tolist():
         msg = (
@@ -124,8 +132,15 @@ def log_first_step_after_reset(
             f"raw_action={_format_debug_vec(env.action_manager.action[env_id])} "
             f"joint_target={_format_debug_vec(robot.data.joint_pos_target[env_id])} "
             f"joint_pos={_format_debug_vec(robot.data.joint_pos[env_id])} "
+            f"plate_pos_w={_format_debug_vec(plate_pos_w[env_id])} "
+            f"plate_quat_w={_format_debug_vec(plate_quat_w[env_id])} "
+            f"ball_pos_w={_format_debug_vec(ball_pos_w[env_id])} "
             f"ball_plate={_format_debug_vec(ball_pos_plate[env_id])} "
             f"ball_vel_plate={_format_debug_vec(ball_vel_plate[env_id])} "
+            f"ball_radial_xy={float(radial_xy[env_id].item()):.4f} "
+            f"{_format_debug_bool('below_racquet', bool(below_racquet[env_id].item()))} "
+            f"{_format_debug_bool('ball_on_floor', bool(on_floor[env_id].item()))} "
+            f"{_format_debug_bool('ball_fell_off', bool(fell_off[env_id].item()))} "
             f"ee_ft_raw={_format_debug_vec(raw_wrench[env_id])} "
             f"ee_ft_bias={_format_debug_vec(bias_wrench[env_id])}"
         )
@@ -1416,6 +1431,16 @@ def reset_ball_on_plate(
     plate_quat_w = robot.data.body_link_quat_w[env_ids][
         :, plate_asset_cfg.body_ids
     ].squeeze(1)
+    env_id_list = env_ids.tolist()
+
+    if _reset_debug_enabled():
+        pre_ball_pos_w = ball.data.root_link_pos_w[env_ids].clone()
+        pre_ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)[
+            env_ids
+        ].clone()
+        pre_ball_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)[
+            env_ids
+        ].clone()
 
     if racquet_x_radius is not None and racquet_y_radius is not None:
         u = sample_uniform(0.0, 1.0, (len(env_ids),), device=env.device)
@@ -1478,13 +1503,29 @@ def reset_ball_on_plate(
         env.sim.forward()
         ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
         ball_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
-        for env_id in env_ids.tolist():
+        actual_ball_pos_w = ball.data.root_link_pos_w[env_ids]
+        radial_xy = torch.linalg.norm(ball_pos_plate[env_ids, :2], dim=-1)
+        below_racquet = ball_pos_plate[env_ids, 2] < -0.06
+        on_floor = actual_ball_pos_w[:, 2] < 0.05
+        for idx, env_id in enumerate(env_id_list):
             print(
                 "[RESET_DEBUG][BALL_RESET] "
                 f"env={env_id} "
                 f"episode={int(env._reset_debug_episode_id[env_id].item())} "
+                f"plate_pos_w={_format_debug_vec(plate_pos_w[idx])} "
+                f"plate_quat_w={_format_debug_vec(plate_quat_w[idx])} "
+                f"pre_ball_pos_w={_format_debug_vec(pre_ball_pos_w[idx])} "
+                f"pre_ball_plate={_format_debug_vec(pre_ball_pos_plate[idx])} "
+                f"pre_ball_vel_plate={_format_debug_vec(pre_ball_vel_plate[idx])} "
+                f"target_offset_plate={_format_debug_vec(offset_plate[idx])} "
+                f"target_ball_pos_w={_format_debug_vec(ball_pos_w[idx])} "
+                f"written_vel_w={_format_debug_vec(vel[idx])} "
+                f"actual_ball_pos_w={_format_debug_vec(actual_ball_pos_w[idx])} "
                 f"ball_plate={_format_debug_vec(ball_pos_plate[env_id])} "
-                f"ball_vel_plate={_format_debug_vec(ball_vel_plate[env_id])}"
+                f"ball_vel_plate={_format_debug_vec(ball_vel_plate[env_id])} "
+                f"ball_radial_xy={float(radial_xy[idx].item()):.4f} "
+                f"{_format_debug_bool('below_racquet', bool(below_racquet[idx].item()))} "
+                f"{_format_debug_bool('ball_on_floor', bool(on_floor[idx].item()))}"
             )
 
 
