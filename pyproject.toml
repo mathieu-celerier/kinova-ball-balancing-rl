@@ -31,6 +31,7 @@ mjlab_kinova = "mjlab_kinova.tasks"
 kinova-train-set = "mjlab_kinova.train_set:main"
 kinova-train-run = "mjlab_kinova.train_run:main"
 kinova-play-set = "mjlab_kinova.play_set:main"
+kinova-play-run = "mjlab_kinova.play_run:main"
 kinova-train-set-duration = "mjlab_kinova.train_set_duration:main"
 
 [tool.ruff]
