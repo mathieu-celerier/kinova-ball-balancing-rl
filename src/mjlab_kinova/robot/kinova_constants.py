@@ -44,6 +44,16 @@ KINOVA_ARTICULATION = EntityArticulationInfoCfg(
     soft_joint_pos_limit_factor=0.95,
 )
 
+KINOVA_ACTION_SCALE: dict[str, float] = {}
+for actuator in KINOVA_ARTICULATION.actuators:
+    assert isinstance(actuator, BuiltinPositionActuatorCfg)
+    effort_limit = actuator.effort_limit
+    stiffness = actuator.stiffness
+    target_names = actuator.target_names_expr
+    assert effort_limit is not None
+    for name in target_names:
+        KINOVA_ACTION_SCALE[name] = 0.25 * effort_limit / stiffness
+
 KINOVA_CFG = EntityCfg(
     spec_fn=get_spec,
     init_state=HOME_FRAME,

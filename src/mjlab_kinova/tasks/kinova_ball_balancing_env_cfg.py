@@ -22,7 +22,7 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
-from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
+from mjlab_kinova.robot.kinova_constants import KINOVA_ACTION_SCALE, KINOVA_CFG
 
 from . import ball_balancing_mdp as bb_mdp
 from .policy_actions import InitialFramePositionActionCfg
@@ -463,7 +463,7 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
             "joint_pos": JointPositionActionCfg(
                 entity_name="robot",
                 actuator_names=(".*",),
-                scale=params.joint_action.scale,
+                scale=KINOVA_ACTION_SCALE,
                 use_default_offset=params.joint_action.use_default_offset,
             )
         }

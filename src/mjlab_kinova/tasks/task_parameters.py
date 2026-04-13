@@ -51,7 +51,6 @@ class ObservationNoiseParameters:
 
 @dataclass(frozen=True)
 class JointActionParameters:
-    scale: float = 0.13
     use_default_offset: bool = True
 
 
