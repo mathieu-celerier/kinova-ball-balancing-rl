@@ -309,7 +309,7 @@ def kinova_ppo_runner_cfg(
         actor=RslRlModelCfg(
             hidden_dims=ppo.actor_hidden_dims,
             activation=ppo.activation,
-            obs_normalization=False,
+            obs_normalization=True,
             distribution_cfg={
                 "class_name": "GaussianDistribution",
                 "init_std": ppo.init_noise_std,
@@ -319,7 +319,7 @@ def kinova_ppo_runner_cfg(
         critic=RslRlModelCfg(
             hidden_dims=ppo.critic_hidden_dims,
             activation=ppo.activation,
-            obs_normalization=False,
+            obs_normalization=True,
         ),
         algorithm=RslRlPpoAlgorithmCfg(
             value_loss_coef=ppo.value_loss_coef,
@@ -381,7 +381,9 @@ def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTe
             ),
         }
     )
-    return _with_observation_history(terms, history_length=params.observation_history_length)
+    return _with_observation_history(
+        terms, history_length=params.observation_history_length
+    )
 
 
 def _with_observation_history(
@@ -603,7 +605,9 @@ def _events_cfg(
             },
         )
 
-    if behavior.use_ball_kick and (not play or params.training.enable_ball_kick_in_play):
+    if behavior.use_ball_kick and (
+        not play or params.training.enable_ball_kick_in_play
+    ):
         kick = params.ball_kick
         events["ball_velocity_kick"] = EventTermCfg(
             func=bb_mdp.kick_ball_velocity,
