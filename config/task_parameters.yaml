@@ -60,7 +60,7 @@ randomization:
 
 rewards:
   is_alive: 0.0
-  ball_no_contact: -100.0
+  ball_no_contact: -50.0
   ball_no_contact_dist: 0.0
   action_rate_l2: -1.0
   action_acc_l2: -0.15
@@ -68,7 +68,7 @@ rewards:
   joint_acc_l2: -0.001
   joint_torque_l2: -0.002
   joint_pos_limits: -5.0
-  plate_drop_under_ball: -20.0
+  plate_drop_under_ball: -100.0
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12
   racquet_ang_vel_l2: -80.0
