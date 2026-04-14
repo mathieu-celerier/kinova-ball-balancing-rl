@@ -385,13 +385,17 @@ def plate_drop_under_ball_penalty(
     ball_height_threshold: float,
     xy_radius: float,
 ) -> torch.Tensor:
-    """Penalty on moving the plate down along its normal while the ball is still above it."""
+    """Penalty on moving the plate down along its normal while the ball is still overhead."""
     ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
+    robot: Entity = env.scene[plate_asset_cfg.name]
+    ball: Entity = env.scene[ball_name]
+    plate_pos_w = robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1)
+    ball_pos_w = ball.data.root_link_pos_w
     plate_vel_plate = body_linear_velocity_in_body_frame(env, plate_asset_cfg)
 
     radial_xy = torch.linalg.norm(ball_pos_plate[:, :2], dim=-1)
     ball_near_racquet = torch.logical_and(
-        ball_pos_plate[:, 2] > ball_height_threshold,
+        ball_pos_w[:, 2] - plate_pos_w[:, 2] > ball_height_threshold,
         radial_xy < xy_radius,
     )
     downward_plate_speed = torch.clamp(-plate_vel_plate[:, 2], min=0.0)
