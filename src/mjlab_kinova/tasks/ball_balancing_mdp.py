@@ -234,6 +234,15 @@ def joint_torques(
     return robot.data.actuator_force
 
 
+def joint_accelerations(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return joint accelerations for the selected joints."""
+    asset: Entity = env.scene[asset_cfg.name]
+    return asset.data.joint_acc[:, asset_cfg.joint_ids]
+
+
 def body_position_w(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
