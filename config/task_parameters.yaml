@@ -71,11 +71,11 @@ rewards:
   plate_drop_under_ball: -100.0
   plate_drop_ball_height_threshold: 0.01
   plate_drop_xy_radius: 0.12
-  racquet_ang_vel_l2: -80.0
-  racquet_lin_vel_l2: -80.0
-  racquet_centering: 200.0
+  racquet_ang_vel_l2: -200.0
+  racquet_lin_vel_l2: -100.0
+  racquet_centering: 50.0
   racquet_centering_std: 0.05
-  racquet_orientation_centering: 50.0
+  racquet_orientation_centering: 100.0
   racquet_orientation_centering_std: 0.2
 
 terminations:
