@@ -1,0 +1,24 @@
+variant: joint
+base_config: ../../task_parameters.yaml
+default_stop_policy:
+  min_iterations: 5000
+  max_iterations: 10000
+  combine: all
+  criteria:
+    - metric: Train/mean_episode_length
+      threshold: 900.0
+      mode: max
+      window: 10
+      patience: 10
+    - metric: Episode_Termination/ball_fell_off
+      threshold: 1
+      mode: min
+      window: 10
+      patience: 10
+global_overrides:
+  ppo:
+    max_iterations: 30000
+runs:
+  - name: pd_gains_only
+    presets: [zero_ball_reset_velocity, simple_rewards, pd_gains_only]
+    overrides: {}

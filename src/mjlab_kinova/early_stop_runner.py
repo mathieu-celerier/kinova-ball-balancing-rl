@@ -134,16 +134,21 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
         metrics: dict[str, float] = {}
 
         if self.logger.ep_extras:
-            for key in self.logger.ep_extras[0]:
+            extra_keys = {
+                key
+                for ep_info in self.logger.ep_extras
+                for key in ep_info
+            }
+            for key in extra_keys:
                 values: list[float] = []
                 for ep_info in self.logger.ep_extras:
-                    if key not in ep_info:
-                        continue
-                    value = ep_info[key]
+                    value = ep_info.get(key, 0.0)
                     if isinstance(value, torch.Tensor):
                         tensor = value.detach().reshape(-1).float()
                         if tensor.numel() > 0:
                             values.extend(tensor.cpu().tolist())
+                        else:
+                            values.append(0.0)
                     else:
                         values.append(float(value))
                 if values:

@@ -1,0 +1,34 @@
+variant: joint
+base_config: ../task_parameters.yaml
+default_stop_policy:
+  min_iterations: 5000
+  max_iterations: 10000
+  combine: all
+  criteria:
+    - metric: Train/mean_episode_length
+      threshold: 900.0
+      mode: max
+      window: 10
+      patience: 10
+    - metric: Episode_Termination/ball_fell_off
+      threshold: 1
+      mode: min
+      window: 10
+      patience: 10
+global_overrides:
+  ppo:
+    max_iterations: 30000
+runs:
+  - joint_randomization_ablation_simple_rewards/no_rand.yaml
+  - joint_randomization_ablation_simple_rewards/obs_noise_only.yaml
+  - joint_randomization_ablation_simple_rewards/ball_reset_only.yaml
+  - joint_randomization_ablation_simple_rewards/ball_reset_linear_velocity_only.yaml
+  - joint_randomization_ablation_simple_rewards/ball_reset_angular_velocity_only.yaml
+  - joint_randomization_ablation_simple_rewards/ball_properties_only.yaml
+  - joint_randomization_ablation_simple_rewards/pd_gains_only.yaml
+  - joint_randomization_ablation_simple_rewards/robot_model_only.yaml
+  - joint_randomization_ablation_simple_rewards/null_space_only.yaml
+  - joint_randomization_ablation_simple_rewards/no_model_rand.yaml
+  - joint_randomization_ablation_simple_rewards/all_except_null_space_and_robot_model.yaml
+  - joint_randomization_ablation_simple_rewards/all_except_robot_model.yaml
+  - joint_randomization_ablation_simple_rewards/all_randomization.yaml
