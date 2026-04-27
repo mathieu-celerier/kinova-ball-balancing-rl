@@ -4,7 +4,7 @@ rewards:
   plate_drop_under_ball: 0.0
   racquet_centering: 20.0
 
-  action_rate_l2: 5.0
+  action_rate_l2: -5.0
   action_acc_l2: 0.0
   joint_vel_l2: 0.0
   joint_acc_l2: 0.0
