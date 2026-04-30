@@ -1,6 +1,6 @@
 rewards:
   is_alive: 1.0
-  ball_no_contact: -20.0
+  ball_no_contact: 0.0
   plate_drop_under_ball: 0.0
   racquet_centering: 20.0
 
@@ -12,4 +12,4 @@ rewards:
   joint_pos_limits: 0.0
   racquet_lin_vel_l2: -50.0
   racquet_ang_vel_l2: -50.0
-  racquet_orientation_centering: 0.0
+  racquet_orientation_centering: 20.0
