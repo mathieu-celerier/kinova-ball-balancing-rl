@@ -644,6 +644,16 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "max_contact_dist": rewards.ball_no_contact_dist,
             },
         ),
+        "ball_centering": RewardTermCfg(
+            func=bb_mdp.ball_centering_reward,
+            weight=rewards.ball_centering,
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "std": rewards.ball_centering_std,
+                "max_contact_dist": rewards.ball_no_contact_dist,
+            },
+        ),
         "action_rate_l2": RewardTermCfg(
             func=mdp.action_rate_l2,
             weight=rewards.action_rate_l2,

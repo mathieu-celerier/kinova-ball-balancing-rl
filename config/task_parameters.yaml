@@ -62,6 +62,8 @@ rewards:
   is_alive: 1.0
   ball_no_contact: -50.0
   ball_no_contact_dist: 0.0
+  ball_centering: 200.0
+  ball_centering_std: 0.04
   action_rate_l2: -1.0
   action_acc_l2: -0.15
   joint_vel_l2: -0.02

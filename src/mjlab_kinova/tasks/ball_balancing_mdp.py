@@ -508,6 +508,31 @@ def ball_contact_state_mujoco(
     return (1.0 - no_contact).unsqueeze(-1)
 
 
+def ball_centering_reward(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+    std: float,
+    ball_geom_name: str = "ball/ball_geom",
+    racquet_geom_name: str = "robot/plate_collision",
+    max_contact_dist: float = 0.0,
+    center_x: float = 0.0,
+    center_y: float = 0.0,
+) -> torch.Tensor:
+    """Reward for keeping the ball centered on the racquet while in contact."""
+    ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
+    dx = ball_pos_plate[:, 0] - center_x
+    dy = ball_pos_plate[:, 1] - center_y
+    radial_error_sq = torch.square(dx) + torch.square(dy)
+    contact_state = ball_contact_state_mujoco(
+        env=env,
+        ball_geom_name=ball_geom_name,
+        racquet_geom_name=racquet_geom_name,
+        max_contact_dist=max_contact_dist,
+    ).squeeze(-1)
+    return contact_state * torch.exp(-radial_error_sq / (std**2))
+
+
 def ball_no_contact_xy_proxy(
     env: "ManagerBasedRlEnv",
     ball_name: str,

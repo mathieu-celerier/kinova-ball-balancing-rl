@@ -110,6 +110,8 @@ class RewardParameters:
     is_alive: float = 0.2
     ball_no_contact: float = -18.0
     ball_no_contact_dist: float = 0.0
+    ball_centering: float = 200.0
+    ball_centering_std: float = 0.04
     action_rate_l2: float = -1.0
     action_acc_l2: float = -0.15
     joint_vel_l2: float = -0.02

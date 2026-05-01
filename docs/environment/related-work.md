@@ -155,6 +155,7 @@ From the configured rewards and terminations, it is optimizing for:
 This is visible in the parameterization:
 
 - `ball_no_contact = -100.0`
+- `ball_centering = 200.0`
 - `plate_drop_under_ball = -20.0`
 - `racquet_lin_vel_l2 = -80.0`
 - `racquet_centering = 100.0`

@@ -96,6 +96,7 @@ The code also stores the initial orientation reference, and the IK objective kee
 Positive terms:
 
 - `is_alive`: `+0.2`
+- `ball_centering`: exponential reward toward the plate center while the ball is in contact
 - `racquet_centering`: exponential reward toward the nominal racquet position
 - `racquet_orientation_centering`: exponential reward toward the nominal racquet orientation
 
@@ -114,6 +115,8 @@ Negative terms:
 
 `plate_drop_under_ball` penalizes moving the plate down along its own normal while the ball is still close above it. This specifically discourages the local-minimum strategy of letting the racquet fall away from the ball while preserving short-term XY centering.
 
+`ball_centering` is gated by MuJoCo contact, so it only pays out when the ball is actually supported.
+
 The racquet centering terms use exponential shaping:
 
 ```text
@@ -124,6 +127,7 @@ r_ori = exp(-orientation_error / std_ori^2)
 This combination is deliberate:
 
 - `ball_no_contact_penalty` makes unsupported flight expensive,
+- `ball_centering` makes supporting the ball near the plate center the profitable contact state,
 - always-on racquet pose and motion terms keep the arm near a quiet local balancing posture,
 - `plate_drop_under_ball` discourages the racquet-drop local minimum.
 

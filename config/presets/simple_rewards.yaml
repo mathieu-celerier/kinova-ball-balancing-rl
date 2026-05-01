@@ -4,6 +4,8 @@ rewards:
   # keep the racquet near its nominal pose, but make unsupported or dropping
   # behavior clearly worse than maintaining contact under the ball.
   ball_no_contact: -20.0
+  ball_centering: 200.0
+  ball_centering_std: 0.04
   plate_drop_under_ball: -20.0
   racquet_centering: 20.0
 
