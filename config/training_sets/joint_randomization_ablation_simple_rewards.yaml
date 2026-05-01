@@ -2,7 +2,7 @@ variant: joint
 base_config: ../task_parameters.yaml
 default_stop_policy:
   min_iterations: 1000
-  max_iterations: 10000
+  max_iterations: 20000
   combine: all
   criteria:
     - metric: Train/mean_episode_length
@@ -19,8 +19,8 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - joint_randomization_ablation_simple_rewards/no_rand.yaml
-  - joint_randomization_ablation_simple_rewards/no_model_rand.yaml
-  - joint_randomization_ablation_simple_rewards/all_except_null_space_and_robot_model.yaml
-  - joint_randomization_ablation_simple_rewards/all_except_robot_model.yaml
   - joint_randomization_ablation_simple_rewards/all_randomization.yaml
+  - joint_randomization_ablation_simple_rewards/all_except_robot_model.yaml
+  - joint_randomization_ablation_simple_rewards/all_except_null_space_and_robot_model.yaml
+  - joint_randomization_ablation_simple_rewards/no_model_rand.yaml
+  - joint_randomization_ablation_simple_rewards/no_rand.yaml
