@@ -635,6 +635,17 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
     rewards = params.rewards
     return {
         "is_alive": RewardTermCfg(func=mdp.is_alive, weight=rewards.is_alive),
+        # Keep the main task-relevant terms first so replay viewers surface them first.
+        "ball_centering": RewardTermCfg(
+            func=bb_mdp.ball_centering_reward,
+            weight=rewards.ball_centering,
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "std": rewards.ball_centering_std,
+                "max_contact_dist": rewards.ball_no_contact_dist,
+            },
+        ),
         "ball_no_contact_penalty": RewardTermCfg(
             func=bb_mdp.ball_no_contact_mujoco,
             weight=rewards.ball_no_contact,
@@ -644,14 +655,44 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
                 "max_contact_dist": rewards.ball_no_contact_dist,
             },
         ),
-        "ball_centering": RewardTermCfg(
-            func=bb_mdp.ball_centering_reward,
-            weight=rewards.ball_centering,
+        "plate_drop_under_ball": RewardTermCfg(
+            func=bb_mdp.plate_drop_under_ball_penalty,
+            weight=rewards.plate_drop_under_ball,
             params={
                 "ball_name": "ball",
                 "plate_asset_cfg": racquet_frame_cfg(),
-                "std": rewards.ball_centering_std,
-                "max_contact_dist": rewards.ball_no_contact_dist,
+                "ball_height_threshold": rewards.plate_drop_ball_height_threshold,
+                "xy_radius": rewards.plate_drop_xy_radius,
+            },
+        ),
+        "racquet_centering": RewardTermCfg(
+            func=bb_mdp.racquet_centering_reward,
+            weight=rewards.racquet_centering,
+            params={
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "std": rewards.racquet_centering_std,
+            },
+        ),
+        "racquet_orientation_centering": RewardTermCfg(
+            func=bb_mdp.racquet_orientation_centering_reward,
+            weight=rewards.racquet_orientation_centering,
+            params={
+                "plate_asset_cfg": racquet_frame_cfg(),
+                "std": rewards.racquet_orientation_centering_std,
+            },
+        ),
+        "racquet_lin_vel_l2": RewardTermCfg(
+            func=bb_mdp.racquet_lin_vel_l2,
+            weight=rewards.racquet_lin_vel_l2,
+            params={
+                "plate_asset_cfg": racquet_frame_cfg(),
+            },
+        ),
+        "racquet_ang_vel_l2": RewardTermCfg(
+            func=bb_mdp.racquet_ang_vel_l2,
+            weight=rewards.racquet_ang_vel_l2,
+            params={
+                "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
         "action_rate_l2": RewardTermCfg(
@@ -681,46 +722,6 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
             func=mdp.joint_pos_limits,
             weight=rewards.joint_pos_limits,
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=("joint_[246]",))},
-        ),
-        "plate_drop_under_ball": RewardTermCfg(
-            func=bb_mdp.plate_drop_under_ball_penalty,
-            weight=rewards.plate_drop_under_ball,
-            params={
-                "ball_name": "ball",
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "ball_height_threshold": rewards.plate_drop_ball_height_threshold,
-                "xy_radius": rewards.plate_drop_xy_radius,
-            },
-        ),
-        "racquet_lin_vel_l2": RewardTermCfg(
-            func=bb_mdp.racquet_lin_vel_l2,
-            weight=rewards.racquet_lin_vel_l2,
-            params={
-                "plate_asset_cfg": racquet_frame_cfg(),
-            },
-        ),
-        "racquet_ang_vel_l2": RewardTermCfg(
-            func=bb_mdp.racquet_ang_vel_l2,
-            weight=rewards.racquet_ang_vel_l2,
-            params={
-                "plate_asset_cfg": racquet_frame_cfg(),
-            },
-        ),
-        "racquet_centering": RewardTermCfg(
-            func=bb_mdp.racquet_centering_reward,
-            weight=rewards.racquet_centering,
-            params={
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "std": rewards.racquet_centering_std,
-            },
-        ),
-        "racquet_orientation_centering": RewardTermCfg(
-            func=bb_mdp.racquet_orientation_centering_reward,
-            weight=rewards.racquet_orientation_centering,
-            params={
-                "plate_asset_cfg": racquet_frame_cfg(),
-                "std": rewards.racquet_orientation_centering_std,
-            },
         ),
     }
 
