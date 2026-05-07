@@ -78,6 +78,7 @@ class PolicySpec:
 @dataclass(frozen=True)
 class TrainingBehavior:
     use_observation_noise: bool
+    use_joint_pos_observation: bool
     reset_ee_ft_bias: bool
     randomize_ball_reset: bool
     randomize_ball_properties: bool
@@ -113,6 +114,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
 DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
     "joint": TrainingBehavior(
         use_observation_noise=True,
+        use_joint_pos_observation=True,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
@@ -123,6 +125,7 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
     ),
     "cartesian": TrainingBehavior(
         use_observation_noise=True,
+        use_joint_pos_observation=False,
         reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
@@ -144,6 +147,11 @@ def _resolve_training_behavior(
             defaults.use_observation_noise
             if training.use_observation_noise is None
             else training.use_observation_noise
+        ),
+        use_joint_pos_observation=(
+            defaults.use_joint_pos_observation
+            if training.use_joint_pos_observation is None
+            else training.use_joint_pos_observation
         ),
         reset_ee_ft_bias=(
             defaults.reset_ee_ft_bias
@@ -351,7 +359,12 @@ def _actor_observation_terms(
     actor_terms = _shared_observation_terms(
         use_noise=behavior.use_observation_noise and not play, params=params
     )
-    selected_terms = {name: actor_terms[name] for name in spec.actor_terms}
+    selected_term_names = tuple(
+        name
+        for name in spec.actor_terms
+        if name != "joint_pos" or behavior.use_joint_pos_observation
+    )
+    selected_terms = {name: actor_terms[name] for name in selected_term_names}
     return _with_observation_history(
         selected_terms,
         history_length=params.observation_history_length,

@@ -20,6 +20,7 @@ global_overrides:
     max_iterations: 30000
 runs:
   - joint_randomization_ablation_simple_rewards/all_randomization.yaml
+  - joint_randomization_ablation_simple_rewards/all_randomization_no_joint_pos.yaml
   - joint_randomization_ablation_simple_rewards/all_except_robot_model.yaml
   - joint_randomization_ablation_simple_rewards/all_except_null_space_and_robot_model.yaml
   - joint_randomization_ablation_simple_rewards/no_model_rand.yaml

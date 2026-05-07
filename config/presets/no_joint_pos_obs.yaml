@@ -1,0 +1,2 @@
+training:
+  use_joint_pos_observation: false
