@@ -588,6 +588,11 @@ def _events_cfg(
             mode="reset",
         )
 
+    events["reset_joint_torque_rate_state"] = EventTermCfg(
+        func=bb_mdp.reset_joint_torque_rate_state,
+        mode="reset",
+    )
+
     if behavior.randomize_ball_properties:
         events["randomize_ball_mass"] = EventTermCfg(
             func=bb_mdp.randomize_body_mass,
@@ -729,6 +734,11 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
         "joint_torque_l2": RewardTermCfg(
             func=bb_mdp.joint_torque_l2,
             weight=rewards.joint_torque_l2,
+            params={"robot_name": "robot"},
+        ),
+        "joint_torque_rate_l2": RewardTermCfg(
+            func=bb_mdp.joint_torque_rate_l2,
+            weight=rewards.joint_torque_rate_l2,
             params={"robot_name": "robot"},
         ),
         "joint_pos_limits": RewardTermCfg(

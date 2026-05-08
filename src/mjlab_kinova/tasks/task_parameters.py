@@ -117,6 +117,7 @@ class RewardParameters:
     joint_vel_l2: float = -0.02
     joint_acc_l2: float = -0.001
     joint_torque_l2: float = -0.002
+    joint_torque_rate_l2: float = 0.0
     joint_pos_limits: float = -5.0
     plate_drop_under_ball: float = -5.0
     plate_drop_ball_height_threshold: float = 0.01

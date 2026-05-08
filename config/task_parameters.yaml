@@ -69,6 +69,7 @@ rewards:
   joint_vel_l2: -0.02
   joint_acc_l2: -0.001
   joint_torque_l2: -0.002
+  joint_torque_rate_l2: 0.0
   joint_pos_limits: -5.0
   plate_drop_under_ball: -100.0
   plate_drop_ball_height_threshold: 0.01

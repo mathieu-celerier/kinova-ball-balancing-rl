@@ -234,6 +234,30 @@ def joint_torques(
     return robot.data.actuator_force
 
 
+def _ensure_joint_torque_rate_state(env: "ManagerBasedRlEnv") -> None:
+    if hasattr(env, "_joint_torque_rate_prev"):
+        return
+    robot: Entity = env.scene["robot"]
+    env._joint_torque_rate_prev = torch.zeros_like(robot.data.actuator_force)
+    env._joint_torque_rate_pending = torch.ones(
+        env.num_envs, device=env.device, dtype=torch.bool
+    )
+
+
+def reset_joint_torque_rate_state(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | slice | None,
+) -> None:
+    """Reset the joint-torque history used by the torque-rate penalty."""
+    env_ids = _as_env_ids(env, env_ids)
+    if env_ids.numel() == 0:
+        return
+    _ensure_joint_torque_rate_state(env)
+    robot: Entity = env.scene["robot"]
+    env._joint_torque_rate_prev[env_ids] = robot.data.actuator_force[env_ids]
+    env._joint_torque_rate_pending[env_ids] = True
+
+
 def joint_accelerations(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
@@ -335,6 +359,28 @@ def joint_torque_l2(
     """Penalty term on squared actuator torques/forces."""
     torques = joint_torques(env, robot_name=robot_name)
     return torch.sum(torch.square(torques), dim=-1)
+
+
+def joint_torque_rate_l2(
+    env: "ManagerBasedRlEnv",
+    robot_name: str = "robot",
+) -> torch.Tensor:
+    """Penalty on squared torque rate, normalized by the environment step."""
+    _ensure_joint_torque_rate_state(env)
+    torques = joint_torques(env, robot_name=robot_name)
+    pending = env._joint_torque_rate_pending
+    prev = env._joint_torque_rate_prev
+    delta = torques - prev
+    rate = delta / env.step_dt
+
+    if pending.any():
+        pending_ids = torch.nonzero(pending, as_tuple=False).squeeze(-1)
+        rate[pending_ids] = 0.0
+        prev[pending_ids] = torques[pending_ids]
+        env._joint_torque_rate_pending[pending_ids] = False
+
+    prev[:] = torques
+    return torch.sum(torch.square(rate), dim=-1)
 
 
 def ball_fell_off(
