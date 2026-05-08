@@ -10,7 +10,7 @@ rewards:
   racquet_centering: 25.0
   racquet_centering_std: 0.2
 
-  action_rate_l2: 0.0
+  action_rate_l2: -0.1
   action_acc_l2: 0.0
   joint_vel_l2: 0.0
   joint_acc_l2: 0.0
