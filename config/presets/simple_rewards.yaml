@@ -1,22 +1,24 @@
 rewards:
   is_alive: 1.0
-  # Simple static-balancing objective:
-  # keep the racquet near its nominal pose, but make unsupported or dropping
-  # behavior clearly worse than maintaining contact under the ball.
+
+  # Ball related
   ball_no_contact: -20.0
   ball_centering: 100.0
   ball_centering_std: 0.04
   plate_drop_under_ball: -20.0
+
+  # Racquet related
   racquet_centering: 25.0
   racquet_centering_std: 0.2
+  racquet_orientation_centering: 10.0
+  racquet_lin_vel_l2: -50.0
+  racquet_ang_vel_l2: -50.0
 
-  action_rate_l2: -0.1
+  # Joint/Action related
+  action_rate_l2: 0.0
   action_acc_l2: 0.0
   joint_vel_l2: 0.0
   joint_acc_l2: 0.0
   joint_torque_l2: 0.0
-  joint_torque_rate_l2: -0.001
+  joint_torque_rate_l2: -0.00001
   joint_pos_limits: 0.0
-  racquet_lin_vel_l2: -50.0
-  racquet_ang_vel_l2: -50.0
-  racquet_orientation_centering: 10.0
