@@ -5,6 +5,7 @@ rewards:
   ball_no_contact: -20.0
   ball_centering: 100.0
   ball_centering_std: 0.04
+  ball_lin_vel_l2: -50
   plate_drop_under_ball: -20.0
 
   # Racquet related
@@ -12,7 +13,7 @@ rewards:
   racquet_centering_std: 0.2
   racquet_orientation_centering: 10.0
   racquet_lin_vel_l2: -50.0
-  racquet_ang_vel_l2: -50.0
+  racquet_ang_vel_l2: -20.0
 
   # Joint/Action related
   action_rate_l2: 0.0

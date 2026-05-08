@@ -64,6 +64,7 @@ rewards:
   ball_no_contact_dist: 0.0
   ball_centering: 200.0
   ball_centering_std: 0.04
+  ball_lin_vel_l2: 0.0
   action_rate_l2: -1.0
   action_acc_l2: -0.15
   joint_vel_l2: -0.02

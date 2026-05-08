@@ -112,6 +112,7 @@ class RewardParameters:
     ball_no_contact_dist: float = 0.0
     ball_centering: float = 200.0
     ball_centering_std: float = 0.04
+    ball_lin_vel_l2: float = 0.0
     action_rate_l2: float = -1.0
     action_acc_l2: float = -0.15
     joint_vel_l2: float = -0.02

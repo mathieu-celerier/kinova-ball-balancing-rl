@@ -451,6 +451,19 @@ def ball_too_high(
     )
 
 
+def ball_lin_vel_l2(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+) -> torch.Tensor:
+    """Penalty on squared ball linear speed in world frame."""
+    ball: Entity = env.scene[ball_name]
+    if hasattr(ball.data, "root_link_lin_vel_w"):
+        ball_lin_vel_w = ball.data.root_link_lin_vel_w
+    else:
+        ball_lin_vel_w = ball.data.root_link_vel_w[:, :3]
+    return torch.sum(torch.square(ball_lin_vel_w), dim=-1)
+
+
 def plate_drop_under_ball_penalty(
     env: "ManagerBasedRlEnv",
     ball_name: str,
