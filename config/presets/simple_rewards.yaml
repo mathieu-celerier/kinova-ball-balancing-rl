@@ -15,7 +15,7 @@ rewards:
   joint_vel_l2: 0.0
   joint_acc_l2: 0.0
   joint_torque_l2: 0.0
-  joint_torque_rate_l2: -1.0
+  joint_torque_rate_l2: -0.001
   joint_pos_limits: 0.0
   racquet_lin_vel_l2: -50.0
   racquet_ang_vel_l2: -50.0
