@@ -361,6 +361,24 @@ def joint_torque_l2(
     return torch.sum(torch.square(torques), dim=-1)
 
 
+def joint_torque_rate(
+    env: "ManagerBasedRlEnv",
+    robot_name: str = "robot",
+) -> torch.Tensor:
+    """Return actuator torque rate normalized by the environment step."""
+    _ensure_joint_torque_rate_state(env)
+    torques = joint_torques(env, robot_name=robot_name)
+    rate = (torques - env._joint_torque_rate_prev) / env.step_dt
+
+    pending = env._joint_torque_rate_pending
+    if pending.any():
+        rate = rate.clone()
+        pending_ids = torch.nonzero(pending, as_tuple=False).squeeze(-1)
+        rate[pending_ids] = 0.0
+
+    return rate
+
+
 def joint_torque_rate_l2(
     env: "ManagerBasedRlEnv",
     robot_name: str = "robot",

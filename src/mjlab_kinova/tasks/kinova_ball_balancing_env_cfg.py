@@ -376,6 +376,14 @@ def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTe
     terms.update(
         {
             "actions": ObservationTermCfg(func=mdp.last_action),
+            "joint_torque": ObservationTermCfg(
+                func=bb_mdp.joint_torques,
+                params={"robot_name": "robot"},
+            ),
+            "joint_torque_rate": ObservationTermCfg(
+                func=bb_mdp.joint_torque_rate,
+                params={"robot_name": "robot"},
+            ),
             "joint_acc": ObservationTermCfg(
                 func=bb_mdp.joint_accelerations,
                 params={"asset_cfg": robot_joints_cfg()},
