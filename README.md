@@ -122,6 +122,12 @@ sync the generated Markdown files into that checkout:
 bash scripts/sync_github_wiki.sh /path/to/your/repo.wiki
 ```
 
+For a safer sync that keeps extra pages already present in the wiki checkout:
+
+```bash
+bash scripts/sync_github_wiki.sh --no-delete /path/to/your/repo.wiki
+```
+
 The script regenerates `wiki/`, then syncs `wiki/` into the separate wiki
 checkout. It writes `Home.md`, `_Sidebar.md`, and the rest of the wiki pages in
 a format GitHub Wiki can render directly.
