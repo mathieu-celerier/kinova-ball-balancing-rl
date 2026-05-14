@@ -119,8 +119,9 @@ To publish it to the GitHub Wiki repository, clone the wiki remote and copy or
 sync the generated Markdown files into that checkout:
 
 ```bash
-python3 scripts/export_github_wiki.py --output-dir /path/to/your/repo.wiki
+bash scripts/sync_github_wiki.sh /path/to/your/repo.wiki
 ```
 
-The exporter writes `Home.md`, `_Sidebar.md`, and the rest of the wiki pages in
+The script regenerates `wiki/`, then syncs `wiki/` into the separate wiki
+checkout. It writes `Home.md`, `_Sidebar.md`, and the rest of the wiki pages in
 a format GitHub Wiki can render directly.
