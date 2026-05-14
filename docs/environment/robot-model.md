@@ -59,3 +59,4 @@ Key parameters:
 - `condim = 6`
 
 These parameters shape the rolling/sliding behavior and the sensitivity of the task to plate motion.
+During training, the ball mass and friction triplet are randomized together to make the policy more robust to real-robot contact variation.

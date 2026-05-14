@@ -99,6 +99,7 @@ class KickParameters:
 class RandomizationParameters:
     null_space_joint_offset: tuple[float, float] = (-1.0, 1.0)
     ball_mass_scale: tuple[float, float] = (0.7, 1.3)
+    ball_friction_scale: tuple[float, float] = (0.8, 1.2)
     pd_gain_scale: tuple[float, float] = (0.95, 1.05)
     robot_body_mass_scale: tuple[float, float] = (0.9, 1.1)
     robot_body_inertia_scale: tuple[float, float] = (0.9, 1.1)

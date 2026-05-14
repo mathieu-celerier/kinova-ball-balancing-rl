@@ -611,6 +611,16 @@ def _events_cfg(
                 "operation": "scale",
             },
         )
+        events["randomize_ball_friction"] = EventTermCfg(
+            func=bb_mdp.randomize_ball_friction,
+            mode="reset",
+            params={
+                "ball_name": "ball",
+                "geom_name": "ball_geom",
+                "friction_scale": randomization.ball_friction_scale,
+                "operation": "scale",
+            },
+        )
 
     if behavior.randomize_pd_gains:
         events["randomize_pd_gains"] = EventTermCfg(

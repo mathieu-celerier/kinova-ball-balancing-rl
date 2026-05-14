@@ -1750,6 +1750,46 @@ def randomize_body_mass(
     )
 
 
+def randomize_ball_friction(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    ball_name: str,
+    geom_name: str,
+    friction_scale: tuple[float, float],
+    operation: str = "scale",
+) -> None:
+    """Randomize the friction triplet for the selected ball geom."""
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.int)
+    else:
+        env_ids = env_ids.to(env.device, dtype=torch.int)
+
+    ball: Entity = env.scene[ball_name]
+    geom_ids, _ = ball.find_geoms(geom_name, preserve_order=True)
+    if not geom_ids:
+        return
+
+    geom_ids = torch.as_tensor(geom_ids, device=env.device, dtype=torch.long)
+    geom_friction = env.sim.model.geom_friction
+    default_geom_friction = env.sim.get_default_field("geom_friction")
+
+    env_grid, geom_grid = torch.meshgrid(env_ids, geom_ids, indexing="ij")
+    base_values = default_geom_friction[geom_ids].unsqueeze(0).expand(len(env_ids), -1, -1)
+    samples = sample_uniform(
+        friction_scale[0],
+        friction_scale[1],
+        base_values.shape,
+        device=env.device,
+    )
+
+    if operation == "scale":
+        geom_friction[env_grid, geom_grid] = base_values * samples
+    elif operation == "abs":
+        geom_friction[env_grid, geom_grid] = samples
+    else:
+        raise ValueError(f"Unsupported operation '{operation}'.")
+
+
 def randomize_body_inertia(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,

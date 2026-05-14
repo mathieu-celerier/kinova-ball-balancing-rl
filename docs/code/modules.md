@@ -28,7 +28,7 @@ Defines task-local computational pieces such as:
 - termination helpers
 - ball reset
 - disturbance kicks
-- inertial randomization helpers
+- inertial and ball-contact randomization helpers
 
 This is where the code most directly meets the mechanics of the task.
 

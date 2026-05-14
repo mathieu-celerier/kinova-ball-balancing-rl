@@ -174,6 +174,7 @@ The default training behavior for the joint-space variant includes:
 - ball release delay in `[0.0, 0.25] s`
 - randomized initial ball linear and angular velocity
 - ball mass scaling in `[0.7, 1.3]`
+- ball friction scaling in `[0.8, 1.2]`
 - PD gain scaling in `[0.95, 1.05]`
 - robot inertial randomization in `[0.9, 1.1]` for selected fields
 

@@ -41,14 +41,14 @@ The repo now distinguishes between:
 - action space: joint-space position commands
 - actor observations: joint state, end-effector state, F/T wrench
 - ball centering reward: active only while ball-racquet contact is present
-- randomization: ball mass, PD gains, null-space reset, robot model
+- randomization: ball mass and friction, PD gains, null-space reset, robot model
 
 ### Cartesian
 
 - action space: end-effector position around the episode's initial frame
 - actor observations: end-effector position, velocity, F/T wrench
 - ball centering reward: active only while ball-racquet contact is present
-- randomization: ball mass, PD gains, robot model
+- randomization: ball mass and friction, PD gains, robot model
 
 ### Joint Preset: NoRobotModelRand
 
