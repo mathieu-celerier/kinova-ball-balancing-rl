@@ -1,0 +1,41 @@
+# MjLab Kinova Ball Balancing
+
+This project provides reinforcement-learning environments for balancing a free ball on a plate mounted to a Kinova Gen3 end-effector in MuJoCo through MjLab.
+
+It is best understood as a coupled robotics and mechanics problem:
+
+- the robot controls plate motion,
+- the plate motion changes contact forces on the ball,
+- the policy must both recenter and damp the ball,
+- the implementation is designed for robust RL rather than idealized scripted control.
+
+## What This Documentation Covers
+
+This site is organized around the actual problem the code is solving:
+
+- how to install and run training,
+- what the environment exposes as observations and actions,
+- how rewards, resets, and terminations are defined,
+- how contact-aware reward shaping changes the learned behavior,
+- why the plate frame and contact terms matter physically,
+- where the relevant code lives.
+
+## Main Task Variants
+
+- `Mjlab-BallBalancing-Kinova`: canonical joint-space variant
+- `Mjlab-BallBalancing-Kinova-Joint`: explicit joint-space alias
+- `Mjlab-BallBalancing-Kinova-Cartesian`: Cartesian end-effector action variant
+- `Mjlab-BallBalancing-Kinova-Play`: play-mode alias
+
+Joint-space ablations such as "no robot model randomization" and "no randomization" are now modeled as parameter presets and training sets instead of separate control-space variants.
+
+## Reading Order
+
+If you are new to the project, start here:
+
+1. [Getting Started](Getting-Started.md)
+2. [Task Overview](Task-Overview.md)
+3. [MDP Design](MDP-Design.md)
+4. [Physics and Control](Physics-and-Control.md)
+5. [Related Work](Related-Work.md)
+6. [Project Structure](Project-Structure.md)

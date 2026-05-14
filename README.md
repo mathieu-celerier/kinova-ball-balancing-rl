@@ -110,16 +110,17 @@ uv run kinova-play-run config/training_sets/joint_randomization_ablation/ball_re
   -- --agent random --num-envs 1 --viewer native
 ```
 
-## Serve the Docs
+## GitHub Wiki
 
-If MkDocs is installed in your environment:
+The documentation is now maintained as GitHub Wiki pages rather than an MkDocs site.
+The wiki-ready Markdown source lives in [`wiki/`](./wiki).
 
-```bash
-mkdocs serve
-```
-
-or install the docs tooling with:
+To publish it to the GitHub Wiki repository, clone the wiki remote and copy or
+sync the generated Markdown files into that checkout:
 
 ```bash
-uv sync --group docs
+python3 scripts/export_github_wiki.py --output-dir /path/to/your/repo.wiki
 ```
+
+The exporter writes `Home.md`, `_Sidebar.md`, and the rest of the wiki pages in
+a format GitHub Wiki can render directly.
