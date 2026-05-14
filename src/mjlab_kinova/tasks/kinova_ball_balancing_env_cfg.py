@@ -677,6 +677,14 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
             weight=rewards.ball_lin_vel_l2,
             params={"ball_name": "ball"},
         ),
+        "ball_lin_vel_plate_l2": RewardTermCfg(
+            func=bb_mdp.ball_lin_vel_in_plate_frame_l2,
+            weight=rewards.ball_lin_vel_plate_l2,
+            params={
+                "ball_name": "ball",
+                "plate_asset_cfg": racquet_frame_cfg(),
+            },
+        ),
         "ball_no_contact_penalty": RewardTermCfg(
             func=bb_mdp.ball_no_contact_mujoco,
             weight=rewards.ball_no_contact,

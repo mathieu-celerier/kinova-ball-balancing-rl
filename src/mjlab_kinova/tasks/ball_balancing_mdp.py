@@ -464,6 +464,18 @@ def ball_lin_vel_l2(
     return torch.sum(torch.square(ball_lin_vel_w), dim=-1)
 
 
+def ball_lin_vel_in_plate_frame_l2(
+    env: "ManagerBasedRlEnv",
+    ball_name: str,
+    plate_asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Penalty on squared ball linear speed in the plate frame."""
+    ball_lin_vel_plate = ball_lin_vel_in_plate_frame(
+        env=env, ball_name=ball_name, plate_asset_cfg=plate_asset_cfg
+    )
+    return torch.sum(torch.square(ball_lin_vel_plate), dim=-1)
+
+
 def plate_drop_under_ball_penalty(
     env: "ManagerBasedRlEnv",
     ball_name: str,

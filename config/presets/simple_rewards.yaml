@@ -6,6 +6,7 @@ rewards:
   ball_centering: 100.0
   ball_centering_std: 0.04
   ball_lin_vel_l2: -50
+  ball_lin_vel_plate_l2: -50
   plate_drop_under_ball: -20.0
 
   # Racquet related
