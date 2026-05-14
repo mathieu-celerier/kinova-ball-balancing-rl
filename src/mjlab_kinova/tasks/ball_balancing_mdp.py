@@ -1760,9 +1760,9 @@ def randomize_ball_friction(
 ) -> None:
     """Randomize the friction triplet for the selected ball geom."""
     if env_ids is None:
-        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.int)
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
     else:
-        env_ids = env_ids.to(env.device, dtype=torch.int)
+        env_ids = env_ids.to(env.device, dtype=torch.long)
 
     ball: Entity = env.scene[ball_name]
     geom_ids, _ = ball.find_geoms(geom_name, preserve_order=True)

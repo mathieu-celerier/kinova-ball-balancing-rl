@@ -8,9 +8,11 @@ from collections import deque
 from dataclasses import dataclass
 from typing import Any
 
+import wandb
 import torch
 from rsl_rl.utils import check_nan
 
+from mjlab.rl.exporter_utils import attach_metadata_to_onnx, get_base_metadata
 from mjlab.rl.runner import MjlabOnPolicyRunner
 
 STOP_CONDITION_ENV_VAR = "MJLAB_KINOVA_STOP_CONDITION"
@@ -310,3 +312,21 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
                 infos=infos,
             )
             self.logger.stop_logging_writer()
+
+    def save(self, path: str, infos=None) -> None:
+        super().save(path, infos)
+        policy_dir, filename, onnx_path = self._get_export_paths(path)
+        try:
+            self.export_policy_to_onnx(str(policy_dir), filename)
+            try:
+                run_name = (
+                    wandb.run.name if self.logger.logger_type == "wandb" and wandb.run else "local"
+                )
+                metadata = get_base_metadata(self.env.unwrapped, run_name)
+                attach_metadata_to_onnx(str(onnx_path), metadata)
+            except Exception as e:
+                print(f"[WARN] ONNX metadata attachment failed (training continues): {e}")
+            if self.logger.logger_type in ["wandb"] and self.cfg["upload_model"]:
+                wandb.save(str(onnx_path), base_path=str(policy_dir))
+        except Exception as e:
+            print(f"[WARN] ONNX export failed (training continues): {e}")
