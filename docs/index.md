@@ -11,7 +11,7 @@ It is best understood as a coupled robotics and mechanics problem:
 
 ## What This Documentation Covers
 
-This site is organized around the actual problem the code is solving:
+This wiki is organized around the actual problem the code is solving:
 
 - how to install and run training,
 - what the environment exposes as observations and actions,

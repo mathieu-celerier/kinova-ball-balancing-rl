@@ -4,7 +4,7 @@ This repository provides reinforcement-learning environments for balancing a fre
 
 ## Documentation
 
-The project now includes a proper docs-site structure under [`docs/`](./docs) with MkDocs configuration in [`mkdocs.yml`](./mkdocs.yml).
+The documentation is maintained as GitHub Wiki pages generated from [`docs/`](./docs).
 
 For task tuning, the main parameter entry points are [`config/task_parameters.yaml`](./config/task_parameters.yaml) and [`src/mjlab_kinova/tasks/task_parameters.py`](./src/mjlab_kinova/tasks/task_parameters.py).
 
@@ -112,7 +112,7 @@ uv run kinova-play-run config/training_sets/joint_randomization_ablation/ball_re
 
 ## GitHub Wiki
 
-The documentation is now maintained as GitHub Wiki pages rather than an MkDocs site.
+The documentation is now maintained as GitHub Wiki pages rather than a local static site.
 The wiki-ready Markdown source lives in [`wiki/`](./wiki).
 
 To publish it to the GitHub Wiki repository, clone the wiki remote and copy or

@@ -70,7 +70,7 @@ def _read_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def _strip_mkdocs_footer(text: str) -> str:
+def _strip_generated_footer(text: str) -> str:
     return text.replace("\n---\n# MjLab Kinova Ball Balancing", "\n\n# MjLab Kinova Ball Balancing", 1)
 
 
@@ -94,7 +94,7 @@ def _rewrite_links(text: str, repo_url: str) -> str:
 
 def _write_page(output_dir: Path, source: Path, output_name: str, repo_url: str) -> None:
     text = _read_text(source)
-    text = _strip_mkdocs_footer(text)
+    text = _strip_generated_footer(text)
     text = _rewrite_links(text, repo_url)
     (output_dir / output_name).write_text(text.rstrip() + "\n", encoding="utf-8")
 
