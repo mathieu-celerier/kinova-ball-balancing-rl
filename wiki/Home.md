@@ -33,9 +33,9 @@ Joint-space ablations such as "no robot model randomization" and "no randomizati
 
 If you are new to the project, start here:
 
-1. [Getting Started](Getting-Started.md)
-2. [Task Overview](Task-Overview.md)
-3. [MDP Design](MDP-Design.md)
-4. [Physics and Control](Physics-and-Control.md)
-5. [Related Work](Related-Work.md)
-6. [Project Structure](Project-Structure.md)
+1. [Getting Started](Getting-Started)
+2. [Task Overview](Task-Overview)
+3. [MDP Design](MDP-Design)
+4. [Physics and Control](Physics-and-Control)
+5. [Related Work](Related-Work)
+6. [Project Structure](Project-Structure)

@@ -24,15 +24,15 @@ PAGE_SOURCES: list[tuple[Path, str]] = [
 ]
 
 WIKI_LINKS = {
-    "index.md": "Home.md",
-    "getting-started.md": "Getting-Started.md",
-    "environment/overview.md": "Task-Overview.md",
-    "environment/mdp.md": "MDP-Design.md",
-    "environment/physics.md": "Physics-and-Control.md",
-    "environment/related-work.md": "Related-Work.md",
-    "environment/robot-model.md": "Robot-and-MuJoCo-Model.md",
-    "code/structure.md": "Project-Structure.md",
-    "code/modules.md": "Key-Modules.md",
+    "index.md": "Home",
+    "getting-started.md": "Getting-Started",
+    "environment/overview.md": "Task-Overview",
+    "environment/mdp.md": "MDP-Design",
+    "environment/physics.md": "Physics-and-Control",
+    "environment/related-work.md": "Related-Work",
+    "environment/robot-model.md": "Robot-and-MuJoCo-Model",
+    "code/structure.md": "Project-Structure",
+    "code/modules.md": "Key-Modules",
 }
 
 
@@ -100,17 +100,17 @@ def _write_page(output_dir: Path, source: Path, output_name: str, repo_url: str)
 
 
 def _write_sidebar(output_dir: Path) -> None:
-    sidebar = """* [Home](Home.md)
-* [Getting Started](Getting-Started.md)
+    sidebar = """* [Home](Home)
+* [Getting Started](Getting-Started)
 * Environment
-  * [Task Overview](Task-Overview.md)
-  * [MDP Design](MDP-Design.md)
-  * [Physics and Control](Physics-and-Control.md)
-  * [Related Work](Related-Work.md)
-  * [Robot and MuJoCo Model](Robot-and-MuJoCo-Model.md)
+  * [Task Overview](Task-Overview)
+  * [MDP Design](MDP-Design)
+  * [Physics and Control](Physics-and-Control)
+  * [Related Work](Related-Work)
+  * [Robot and MuJoCo Model](Robot-and-MuJoCo-Model)
 * Code Reference
-  * [Project Structure](Project-Structure.md)
-  * [Key Modules](Key-Modules.md)
+  * [Project Structure](Project-Structure)
+  * [Key Modules](Key-Modules)
 """
     (output_dir / "_Sidebar.md").write_text(sidebar, encoding="utf-8")
 
