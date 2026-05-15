@@ -6,6 +6,7 @@ import statistics
 import time
 from collections import deque
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import wandb
@@ -315,7 +316,10 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
 
     def save(self, path: str, infos=None) -> None:
         super().save(path, infos)
-        policy_dir, filename, onnx_path = self._get_export_paths(path)
+        checkpoint_path = Path(path)
+        policy_dir = checkpoint_path.parent
+        filename = checkpoint_path.with_suffix(".onnx").name
+        onnx_path = policy_dir / filename
         try:
             self.export_policy_to_onnx(str(policy_dir), filename)
             try:
