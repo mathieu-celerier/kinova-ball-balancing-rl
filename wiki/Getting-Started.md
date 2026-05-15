@@ -147,29 +147,17 @@ If you expected to use a GPU, verify that:
 - `CUDA_VISIBLE_DEVICES` is not masking the device,
 - your `uv run ...` process has access to the NVIDIA driver stack.
 
-## Build the Documentation Site
+## Wiki Export
 
-The repository includes an MkDocs configuration.
+The project documentation is exported to GitHub Wiki-compatible Markdown files.
 
-To install the docs tooling through the project dependency group:
-
-```bash
-uv sync --group docs
-```
-
-If MkDocs is installed in your environment, run:
+To regenerate the wiki pages from `docs/`:
 
 ```bash
-mkdocs serve
+python3 scripts/export_github_wiki.py --output-dir wiki
 ```
 
-or:
-
-```bash
-mkdocs build
-```
-
-This serves the documentation as a normal project docs website instead of a single README page.
+The generated files can be synced into the separate GitHub Wiki checkout of this repository.
 
 ## Configure Parameters
 

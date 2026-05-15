@@ -41,7 +41,7 @@ if [[ -z "$target_dir" ]]; then
 fi
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-target_dir="$1"
+mkdir -p "$target_dir"
 
 python3 "$repo_root/scripts/export_github_wiki.py" --output-dir "$repo_root/wiki"
 if [[ "$delete_mode" -eq 1 ]]; then
