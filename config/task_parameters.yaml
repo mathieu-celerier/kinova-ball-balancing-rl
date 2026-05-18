@@ -136,6 +136,7 @@ training:
   randomize_ball_reset: null
   randomize_ball_properties: null
   randomize_pd_gains: null
+  randomize_racquet_model: null
   randomize_robot_model: null
   randomize_null_space_init: null
   use_ball_kick: null

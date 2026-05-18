@@ -1840,6 +1840,30 @@ def randomize_robot_model(
     )
 
 
+def randomize_racquet_model(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    body_mass_range: tuple[float, float],
+    body_inertia_range: tuple[float, float],
+    asset_cfg: SceneEntityCfg,
+) -> None:
+    """Randomize the inertial properties of the racquet / plate body."""
+    randomize_body_mass(
+        env=env,
+        env_ids=env_ids,
+        asset_cfg=asset_cfg,
+        mass_range=body_mass_range,
+        operation="scale",
+    )
+    randomize_body_inertia(
+        env=env,
+        env_ids=env_ids,
+        asset_cfg=asset_cfg,
+        inertia_range=body_inertia_range,
+        operation="scale",
+    )
+
+
 def randomize_pd_gains(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -1971,5 +1995,6 @@ def _randomize_dof_armature(
 
 randomize_body_mass.model_fields = ("body_mass",)
 randomize_body_inertia.model_fields = ("body_inertia",)
+randomize_racquet_model.model_fields = ("body_mass", "body_inertia")
 randomize_robot_model.model_fields = ("body_mass", "body_inertia", "dof_armature")
 randomize_pd_gains.model_fields = ("actuator_gainprm", "actuator_biasprm")

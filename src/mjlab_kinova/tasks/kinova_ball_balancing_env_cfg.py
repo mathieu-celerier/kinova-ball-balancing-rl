@@ -43,6 +43,10 @@ def racquet_frame_cfg() -> SceneEntityCfg:
     return SceneEntityCfg("robot", body_names=("racquet_frame",))
 
 
+def racquet_body_cfg() -> SceneEntityCfg:
+    return SceneEntityCfg("robot", body_names=("plate",))
+
+
 def robot_bodies_cfg() -> SceneEntityCfg:
     return SceneEntityCfg(
         "robot",
@@ -83,6 +87,7 @@ class TrainingBehavior:
     randomize_ball_reset: bool
     randomize_ball_properties: bool
     randomize_pd_gains: bool
+    randomize_racquet_model: bool
     randomize_robot_model: bool
     randomize_null_space_init: bool
     use_ball_kick: bool
@@ -119,6 +124,7 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=True,
+        randomize_racquet_model=False,
         randomize_robot_model=True,
         randomize_null_space_init=True,
         use_ball_kick=True,
@@ -130,6 +136,7 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=True,
+        randomize_racquet_model=False,
         randomize_robot_model=True,
         randomize_null_space_init=False,
         use_ball_kick=True,
@@ -172,6 +179,11 @@ def _resolve_training_behavior(
             defaults.randomize_pd_gains
             if training.randomize_pd_gains is None
             else training.randomize_pd_gains
+        ),
+        randomize_racquet_model=(
+            defaults.randomize_racquet_model
+            if training.randomize_racquet_model is None
+            else training.randomize_racquet_model
         ),
         randomize_robot_model=(
             defaults.randomize_robot_model
@@ -631,6 +643,17 @@ def _events_cfg(
                 "kd_range": randomization.pd_gain_scale,
                 "asset_cfg": robot_actuators_cfg(),
                 "operation": "scale",
+            },
+        )
+
+    if behavior.randomize_racquet_model:
+        events["randomize_racquet_model"] = EventTermCfg(
+            func=bb_mdp.randomize_racquet_model,
+            mode="reset",
+            params={
+                "body_mass_range": randomization.racquet_body_mass_scale,
+                "body_inertia_range": randomization.racquet_body_inertia_scale,
+                "asset_cfg": racquet_body_cfg(),
             },
         )
 

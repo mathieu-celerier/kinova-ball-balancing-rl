@@ -101,6 +101,8 @@ class RandomizationParameters:
     ball_mass_scale: tuple[float, float] = (0.7, 1.3)
     ball_friction_scale: tuple[float, float] = (0.8, 1.2)
     pd_gain_scale: tuple[float, float] = (0.95, 1.05)
+    racquet_body_mass_scale: tuple[float, float] = (0.9, 1.1)
+    racquet_body_inertia_scale: tuple[float, float] = (0.9, 1.1)
     robot_body_mass_scale: tuple[float, float] = (0.9, 1.1)
     robot_body_inertia_scale: tuple[float, float] = (0.9, 1.1)
     robot_dof_armature_scale: tuple[float, float] = (0.9, 1.1)
@@ -192,6 +194,7 @@ class TrainingParameters:
     randomize_ball_reset: bool | None = None
     randomize_ball_properties: bool | None = None
     randomize_pd_gains: bool | None = None
+    randomize_racquet_model: bool | None = None
     randomize_robot_model: bool | None = None
     randomize_null_space_init: bool | None = None
     use_ball_kick: bool | None = None
