@@ -84,7 +84,13 @@ class NullspaceTorqueAction(DifferentialIKAction):
 
     def __init__(self, cfg: NullspaceTorqueActionCfg, env: ManagerBasedRlEnv):
         super().__init__(cfg=cfg, env=env)
-        self._joint_ctrl_ids = self._entity.indexing.ctrl_ids[self._joint_ids]
+        self._ctrl_ids = self._entity.indexing.ctrl_ids[self._joint_ids]
+        local_body_matches = torch.nonzero(
+            self._entity.indexing.body_ids == self._body_id, as_tuple=False
+        ).squeeze(-1)
+        if local_body_matches.numel() != 1:
+            raise RuntimeError("Failed to map Cartesian frame body to entity-local body index.")
+        self._local_body_id = int(local_body_matches.item())
 
     def process_actions(self, actions: torch.Tensor) -> None:
         self._raw_actions[:] = actions
@@ -95,13 +101,13 @@ class NullspaceTorqueAction(DifferentialIKAction):
         robot = self._entity
         frame_pos, frame_quat = self._get_frame_pose()
         if hasattr(robot.data, "body_link_lin_vel_w"):
-            frame_lin_vel = robot.data.body_link_lin_vel_w[:, self._body_id]
+            frame_lin_vel = robot.data.body_link_lin_vel_w[:, self._local_body_id]
         else:
-            frame_lin_vel = robot.data.body_link_vel_w[:, self._body_id, :3]
+            frame_lin_vel = robot.data.body_link_vel_w[:, self._local_body_id, :3]
         if hasattr(robot.data, "body_link_ang_vel_w"):
-            frame_ang_vel = robot.data.body_link_ang_vel_w[:, self._body_id]
+            frame_ang_vel = robot.data.body_link_ang_vel_w[:, self._local_body_id]
         else:
-            frame_ang_vel = robot.data.body_link_vel_w[:, self._body_id, 3:]
+            frame_ang_vel = robot.data.body_link_vel_w[:, self._local_body_id, 3:]
 
         pos_error, rot_error = compute_pose_error(
             frame_pos,
@@ -146,12 +152,6 @@ class NullspaceTorqueAction(DifferentialIKAction):
         tau_null = torch.einsum("bij,bj->bi", null_proj, null_ref)
         tau = tau_task + tau_null
 
-        stiffness = self._env.sim.model.actuator_gainprm[:, self._joint_ctrl_ids, 0]
-        damping = -self._env.sim.model.actuator_biasprm[:, self._joint_ctrl_ids, 2]
-        # The Kinova model is still position-actuated, so convert the desired
-        # joint torques into equivalent position targets through the built-in PD.
-        ctrl = q + (tau + damping * qd) / torch.clamp(stiffness, min=1e-6)
-        lower = robot.data.soft_joint_pos_limits[:, self._joint_ids, 0]
-        upper = robot.data.soft_joint_pos_limits[:, self._joint_ids, 1]
-        ctrl = torch.maximum(torch.minimum(ctrl, upper), lower)
-        robot.set_joint_position_target(ctrl, joint_ids=self._joint_ids)
+        effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
+        tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)
+        robot.set_joint_effort_target(tau, joint_ids=self._joint_ids)

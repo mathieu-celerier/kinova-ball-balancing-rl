@@ -22,7 +22,11 @@ from mjlab.sim import MujocoCfg, SimulationCfg
 from mjlab.terrains import TerrainEntityCfg
 from mjlab.utils.noise import UniformNoiseCfg as Unoise
 from mjlab.viewer import ViewerConfig
-from mjlab_kinova.robot.kinova_constants import KINOVA_ACTION_SCALE, KINOVA_CFG
+from mjlab_kinova.robot.kinova_constants import (
+    KINOVA_ACTION_SCALE,
+    KINOVA_CFG,
+    KINOVA_EFFORT_CFG,
+)
 
 from . import ball_balancing_mdp as bb_mdp
 from .policy_actions import NullspaceTorqueActionCfg
@@ -69,6 +73,10 @@ def robot_bodies_cfg() -> SceneEntityCfg:
 
 def ball_body_cfg() -> SceneEntityCfg:
     return SceneEntityCfg("ball", body_names=("ball",))
+
+
+def _robot_cfg_for_variant(variant: PolicyVariant) -> EntityCfg:
+    return KINOVA_EFFORT_CFG if variant == "cartesian" else KINOVA_CFG
 
 
 @dataclass(frozen=True)
@@ -272,7 +280,7 @@ def kinova_ball_balancing_env_cfg(
         scene=SceneCfg(
             terrain=TerrainEntityCfg(terrain_type="plane"),
             entities={
-                "robot": KINOVA_CFG,
+                "robot": _robot_cfg_for_variant(variant),
                 "ball": _ball_entity_cfg(params),
             },
             num_envs=params.simulation.num_envs,

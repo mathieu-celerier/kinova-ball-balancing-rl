@@ -2,7 +2,7 @@ from pathlib import Path
 import os
 import mujoco
 
-from mjlab.actuator import BuiltinPositionActuatorCfg
+from mjlab.actuator import BuiltinMotorActuatorCfg, BuiltinPositionActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
 KINOVA_XML: Path = Path(os.path.dirname(__file__)) / "kinova.xml"
@@ -44,6 +44,20 @@ KINOVA_ARTICULATION = EntityArticulationInfoCfg(
     soft_joint_pos_limit_factor=0.95,
 )
 
+KINOVA_EFFORT_ARTICULATION = EntityArticulationInfoCfg(
+    actuators=(
+        BuiltinMotorActuatorCfg(
+            target_names_expr=("joint_1", "joint_2", "joint_3", "joint_4"),
+            effort_limit=95.0,
+        ),
+        BuiltinMotorActuatorCfg(
+            target_names_expr=("joint_5", "joint_6", "joint_7"),
+            effort_limit=45.0,
+        ),
+    ),
+    soft_joint_pos_limit_factor=0.95,
+)
+
 KINOVA_ACTION_SCALE: dict[str, float] = {}
 for actuator in KINOVA_ARTICULATION.actuators:
     assert isinstance(actuator, BuiltinPositionActuatorCfg)
@@ -58,6 +72,12 @@ KINOVA_CFG = EntityCfg(
     spec_fn=get_spec,
     init_state=HOME_FRAME,
     articulation=KINOVA_ARTICULATION,
+)
+
+KINOVA_EFFORT_CFG = EntityCfg(
+    spec_fn=get_spec,
+    init_state=HOME_FRAME,
+    articulation=KINOVA_EFFORT_ARTICULATION,
 )
 
 if __name__ == "__main__":
