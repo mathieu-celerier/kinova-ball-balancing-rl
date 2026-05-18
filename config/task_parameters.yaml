@@ -24,7 +24,7 @@ joint_action:
 cartesian_action:
   damping_task: 8.0
   damping_null: 5.0
-  damping_pinv: 0.001
+  damping_pinv: 0.0
   position_weight: 50.0
   orientation_weight: 50.0
   posture_weight: 20.0
