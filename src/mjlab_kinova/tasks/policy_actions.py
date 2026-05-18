@@ -69,6 +69,10 @@ class InitialFramePositionAction(DifferentialIKAction):
 class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
     """Cartesian action that maps pose commands to task-space torques."""
 
+    damping_task: float = 0.05
+    damping_null: float = 0.05
+    damping_pinv: float = 0.05
+
     def __post_init__(self) -> None:
         self.use_relative_mode = False
         self.orientation_weight = 1.0
@@ -124,8 +128,8 @@ class NullspaceTorqueAction(DifferentialIKAction):
 
         task_wrench = torch.cat(
             (
-                self.cfg.position_weight * pos_error - self.cfg.damping * frame_lin_vel,
-                self.cfg.orientation_weight * rot_error - self.cfg.damping * frame_ang_vel,
+                self.cfg.position_weight * pos_error - self.cfg.damping_task * frame_lin_vel,
+                self.cfg.orientation_weight * rot_error - self.cfg.damping_task * frame_ang_vel,
             ),
             dim=-1,
         )
@@ -137,13 +141,13 @@ class NullspaceTorqueAction(DifferentialIKAction):
             q_ns = self._posture_target
         else:
             q_ns = q_ns_full[:, self._joint_ids]
-        null_ref = self.cfg.posture_weight * (q_ns - q) - self.cfg.damping * qd
+        null_ref = self.cfg.posture_weight * (q_ns - q) - self.cfg.damping_null * qd
 
         jjt = torch.einsum("bij,bkj->bik", jac, jac)
         eye_task = torch.eye(jjt.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
         j_pinv = torch.matmul(
             jac.transpose(1, 2),
-            torch.linalg.inv(jjt + (self.cfg.damping ** 2) * eye_task),
+            torch.linalg.inv(jjt + (self.cfg.damping_pinv**2) * eye_task),
         )
         eye_joint = torch.eye(jac.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
         null_proj = eye_joint - torch.matmul(j_pinv, jac)

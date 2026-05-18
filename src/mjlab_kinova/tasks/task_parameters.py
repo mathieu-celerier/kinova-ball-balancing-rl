@@ -56,9 +56,9 @@ class JointActionParameters:
 
 @dataclass(frozen=True)
 class CartesianActionParameters:
-    delta_pos_scale: float = 0.04
-    damping: float = 0.05
-    max_dq: float = 0.2
+    damping_task: float = 0.05
+    damping_null: float = 0.05
+    damping_pinv: float = 0.05
     position_weight: float = 1.0
     orientation_weight: float = 1.0
     posture_weight: float = 0.03
