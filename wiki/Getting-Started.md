@@ -46,6 +46,13 @@ uv run train Mjlab-BallBalancing-Kinova --env.scene.num-envs 512
 uv run train Mjlab-BallBalancing-Kinova-Cartesian --env.scene.num-envs 512
 ```
 
+Cartesian batch runs:
+
+```bash
+uv run kinova-train-set config/training_sets/cartesian_ablation_simple_rewards.yaml \
+  -- --env.scene.num-envs 4096 --video True --video-interval 1000 --video-length 500 --env.viewer.max-extra-envs 0
+```
+
 Batch runs for one variant are defined under `config/training_sets/` and launched with:
 
 ```bash
