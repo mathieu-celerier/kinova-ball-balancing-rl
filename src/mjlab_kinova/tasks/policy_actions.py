@@ -19,7 +19,7 @@ class InitialFramePositionActionCfg(DifferentialIKActionCfg):
 
     def __post_init__(self) -> None:
         self.use_relative_mode = False
-        self.orientation_weight = 0.0
+        self.orientation_weight = 1.0
 
     def build(self, env: ManagerBasedRlEnv) -> "InitialFramePositionAction":
         return InitialFramePositionAction(self, env)
@@ -41,6 +41,11 @@ class InitialFramePositionAction(DifferentialIKAction):
 
     def process_actions(self, actions: torch.Tensor) -> None:
         self._raw_actions[:] = actions
+
+        if self._action_dim == 7:
+            self._desired_pos[:] = actions[:, :3]
+            self._desired_quat[:] = actions[:, 3:7]
+            return
 
         current_pos, current_quat = self._get_frame_pose()
         missing_anchor = ~self._initial_frame_ready
