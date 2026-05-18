@@ -25,7 +25,7 @@ from mjlab.viewer import ViewerConfig
 from mjlab_kinova.robot.kinova_constants import KINOVA_ACTION_SCALE, KINOVA_CFG
 
 from . import ball_balancing_mdp as bb_mdp
-from .policy_actions import InitialFramePositionActionCfg
+from .policy_actions import NullspaceTorqueActionCfg
 from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
 PolicyVariant = Literal["joint", "cartesian"]
@@ -513,7 +513,7 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
 
     action = params.cartesian_action
     return {
-        "ee_pos": InitialFramePositionActionCfg(
+        "ee_pos": NullspaceTorqueActionCfg(
             entity_name="robot",
             actuator_names=(".*",),
             frame_type="body",

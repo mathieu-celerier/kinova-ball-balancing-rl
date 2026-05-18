@@ -1331,6 +1331,11 @@ def reset_joints_preserving_racquet_pose(
     robot.write_joint_state_to_sim(final_q, final_qd, env_ids=env_ids)
     robot.set_joint_position_target(final_q, env_ids=env_ids)
     robot.set_joint_velocity_target(final_qd, env_ids=env_ids)
+    if not hasattr(env, "_racquet_nullspace_q_ns") or env._racquet_nullspace_q_ns.shape != robot.data.joint_pos.shape:
+        env._racquet_nullspace_q_ns = torch.zeros_like(robot.data.joint_pos)
+    # Reuse the sampled compatible posture as the null-space reference for the
+    # cartesian controller.
+    env._racquet_nullspace_q_ns[env_ids] = final_q
 
     if _reset_debug_enabled():
         _ensure_reset_debug_state(env)
