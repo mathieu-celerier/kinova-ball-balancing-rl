@@ -1,5 +1,5 @@
 variant: cartesian
-base_config: ../task_parameters.yaml
+base_config: ../../task_parameters.yaml
 default_stop_policy:
   min_iterations: 5000
   max_iterations: 20000
@@ -19,6 +19,11 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - cartesian_ablation_simple_rewards/all_randomization.yaml
-  - cartesian_ablation_simple_rewards/ball_properties_only.yaml
-  - cartesian_ablation_simple_rewards/no_rand.yaml
+  - name: ball_properties_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_properties_only,
+      ]
+    overrides: {}
