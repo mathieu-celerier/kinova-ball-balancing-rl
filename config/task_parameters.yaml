@@ -22,12 +22,12 @@ joint_action:
   use_default_offset: true
 
 cartesian_action:
-  damping_task: 0.05
-  damping_null: 0.05
-  damping_pinv: 0.05
-  position_weight: 1.0
-  orientation_weight: 1.0
-  posture_weight: 0.03
+  damping_task: 8.0
+  damping_null: 5.0
+  damping_pinv: 0.001
+  position_weight: 50.0
+  orientation_weight: 50.0
+  posture_weight: 20.0
 
 ball_reset:
   xy_range: [-0.02, 0.02]
