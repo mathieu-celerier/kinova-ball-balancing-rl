@@ -46,6 +46,7 @@ def _append_racquet_frame_debug_axes(root: ET.Element) -> None:
                 "type": "capsule",
                 "fromto": fromto,
                 "size": size,
+                "density": "0",
                 "rgba": rgba,
                 "contype": "0",
                 "conaffinity": "0",
