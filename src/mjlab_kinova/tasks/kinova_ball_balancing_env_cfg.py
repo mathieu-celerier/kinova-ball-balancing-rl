@@ -526,6 +526,8 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
             actuator_names=(".*",),
             frame_type="body",
             frame_name="racquet_frame",
+            delta_pos_scale=action.delta_pos_scale,
+            delta_ori_scale=action.delta_ori_scale,
             damping_task=action.damping_task,
             damping_null=action.damping_null,
             damping_pinv=action.damping_pinv,

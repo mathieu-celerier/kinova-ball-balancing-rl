@@ -22,6 +22,8 @@ joint_action:
   use_default_offset: true
 
 cartesian_action:
+  delta_pos_scale: 0.05
+  delta_ori_scale: 0.5
   damping_task: 8.0
   damping_null: 5.0
   damping_pinv: 0.0

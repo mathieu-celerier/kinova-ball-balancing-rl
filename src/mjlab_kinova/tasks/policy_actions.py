@@ -11,7 +11,7 @@ from mjlab.envs.mdp.actions.differential_ik import (
     DifferentialIKActionCfg,
 )
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
-from mjlab.utils.lab_api.math import compute_pose_error
+from mjlab.utils.lab_api.math import apply_delta_pose, compute_pose_error
 
 
 @dataclass(kw_only=True)
@@ -74,7 +74,7 @@ class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
     damping_pinv: float = 0.05
 
     def __post_init__(self) -> None:
-        self.use_relative_mode = False
+        self.use_relative_mode = True
         self.orientation_weight = 1.0
 
     def build(self, env: ManagerBasedRlEnv) -> "NullspaceTorqueAction":
@@ -89,6 +89,12 @@ class NullspaceTorqueAction(DifferentialIKAction):
     def __init__(self, cfg: NullspaceTorqueActionCfg, env: ManagerBasedRlEnv):
         super().__init__(cfg=cfg, env=env)
         self._ctrl_ids = self._entity.indexing.ctrl_ids[self._joint_ids]
+        self._initial_frame_pos = torch.zeros(self.num_envs, 3, device=self.device)
+        self._initial_frame_quat = torch.zeros(self.num_envs, 4, device=self.device)
+        self._initial_frame_quat[:, 0] = 1.0
+        self._initial_frame_ready = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.bool
+        )
         local_body_matches = torch.nonzero(
             self._entity.indexing.body_ids == self._body_id, as_tuple=False
         ).squeeze(-1)
@@ -98,8 +104,27 @@ class NullspaceTorqueAction(DifferentialIKAction):
 
     def process_actions(self, actions: torch.Tensor) -> None:
         self._raw_actions[:] = actions
-        self._desired_pos[:] = actions[:, :3]
-        self._desired_quat[:] = actions[:, 3:7]
+        frame_pos, frame_quat = self._get_frame_pose()
+        missing_anchor = ~self._initial_frame_ready
+        if torch.any(missing_anchor):
+            self._initial_frame_pos[missing_anchor] = frame_pos[missing_anchor]
+            self._initial_frame_quat[missing_anchor] = frame_quat[missing_anchor]
+            self._initial_frame_ready[missing_anchor] = True
+
+        if self._action_dim == 6:
+            delta = actions.clone()
+            delta[:, :3] *= self.cfg.delta_pos_scale
+            delta[:, 3:] *= self.cfg.delta_ori_scale
+            target_pos, target_quat = apply_delta_pose(
+                self._initial_frame_pos,
+                self._initial_frame_quat,
+                delta,
+            )
+            self._desired_pos[:] = target_pos
+            self._desired_quat[:] = target_quat
+        else:
+            self._desired_pos[:] = actions[:, :3]
+            self._desired_quat[:] = actions[:, 3:7]
 
     def apply_actions(self) -> None:
         robot = self._entity
@@ -159,3 +184,9 @@ class NullspaceTorqueAction(DifferentialIKAction):
         effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
         tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)
         robot.set_joint_effort_target(tau, joint_ids=self._joint_ids)
+
+    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+        super().reset(env_ids=env_ids)
+        if env_ids is None:
+            env_ids = slice(None)
+        self._initial_frame_ready[env_ids] = False
