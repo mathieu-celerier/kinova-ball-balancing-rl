@@ -12,6 +12,7 @@ from mjlab_kinova.train_set import (
     _build_run_parameters,
     _load_training_set,
     _normalize_run,
+    _resolve_run_cfg,
     _write_temp_params,
 )
 
@@ -66,6 +67,11 @@ def main() -> int:
 
     matched_run: tuple[str, list[str], dict] | None = None
     for index, raw_run_cfg in enumerate(training_set_cfg["runs"]):
+        raw_run_cfg = _resolve_run_cfg(
+            raw_run_cfg,
+            index=index,
+            relative_to=training_set_path.parent,
+        )
         run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
         if run_name == args.run_name:
             matched_run = (run_name, preset_refs, overrides)
