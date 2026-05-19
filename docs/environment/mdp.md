@@ -75,21 +75,24 @@ The resulting action scales are:
 
 ### Cartesian Variant
 
-The Cartesian variant uses `InitialFramePositionAction`, which anchors commands to the initial end-effector frame pose of the episode.
+The Cartesian variant uses `NullspaceTorqueAction`, which anchors commands to the initial racquet frame pose of the episode and outputs joint torques through the operational-space controller.
 
-The implemented command law is:
+The policy action is 6D and interpreted as relative pose deltas:
 
 ```text
-x_ref = x_0 + a * delta_pos_scale
+p_ref = p_0 + delta_pos_scale * a_pos
+R_ref = Exp(delta_ori_scale * a_rot) R_0
 ```
 
 with:
 
-- `x_0`: initial end-effector position
-- `a`: policy action
-- `delta_pos_scale = 0.04`
+- `p_0, R_0`: initial racquet pose at the start of the episode
+- `a_pos`: the first 3 action components
+- `a_rot`: the last 3 action components, interpreted in angle-axis form
+- `delta_pos_scale = 0.05`
+- `delta_ori_scale = 0.5`
 
-The code also stores the initial orientation reference, and the IK objective keeps that orientation active with `orientation_weight = 1.0`.
+Those pose targets are then tracked by the Cartesian torque controller with the null-space posture term described below.
 
 ## Reward Terms
 
