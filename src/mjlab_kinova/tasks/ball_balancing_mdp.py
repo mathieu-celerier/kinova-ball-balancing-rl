@@ -15,6 +15,7 @@ from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
 from mjlab.utils.lab_api.math import compute_pose_error, quat_apply, quat_apply_inverse
+from mjlab.utils.lab_api.math import quat_conjugate, quat_mul
 from mjlab.utils.lab_api.math import sample_uniform
 from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 
@@ -293,6 +294,41 @@ def body_orientation_w(
     """Return the selected body orientation quaternion in world frame."""
     asset: Entity = env.scene[asset_cfg.name]
     return asset.data.body_link_quat_w[:, asset_cfg.body_ids].squeeze(1)
+
+
+def body_position_rel_nominal(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return selected body position relative to its nominal home pose."""
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=asset_cfg,
+        )
+
+    nominal_pos_w, _nominal_quat_w = env._racquet_nominal_pose_w
+    return body_position_w(env, asset_cfg) - nominal_pos_w
+
+
+def body_orientation_rel_nominal(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return selected body orientation relative to its nominal home orientation."""
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=asset_cfg,
+        )
+
+    _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
+    quat_w = body_orientation_w(env, asset_cfg)
+    quat_rel = quat_mul(quat_w, quat_conjugate(nominal_quat_w))
+    quat_rel = quat_rel / torch.linalg.norm(quat_rel, dim=-1, keepdim=True).clamp(
+        min=1.0e-8
+    )
+    return torch.where(quat_rel[:, :1] < 0.0, -quat_rel, quat_rel)
 
 
 def body_linear_velocity_w(

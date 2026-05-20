@@ -9,7 +9,7 @@ Registers the canonical control-space variants through MjLab's task registry, pl
 Defines:
 
 - control-space variants
-- observations
+- variant-specific actor and critic observations
 - actions
 - events
 - rewards
@@ -23,7 +23,8 @@ This is the main file to read if you want to understand the environment at the c
 Defines task-local computational pieces such as:
 
 - ball state in the plate frame
-- wrench access
+- relative joint and end-effector pose observations
+- racquet-weight-compensated wrench access
 - contact-aware reward helpers
 - termination helpers
 - ball reset
@@ -34,9 +35,14 @@ This is where the code most directly meets the mechanics of the task.
 
 ## `src/mjlab_kinova/tasks/policy_actions.py`
 
-Implements the custom Cartesian action term `InitialFramePositionAction`.
+Implements the custom Cartesian action terms:
 
-Its main role is to reinterpret policy outputs as end-effector position offsets around the initial episode frame and pass those references through differential IK.
+- `InitialFramePositionAction`, kept for position-reference style Cartesian actions
+- `NullspaceTorqueAction`, the current Cartesian ball-balancing action term
+
+`NullspaceTorqueAction` interprets the 6D policy output as a pose delta around
+the episode's initial racquet frame, then tracks that target with an
+operational-space torque controller and a null-space posture term.
 
 ## `src/mjlab_kinova/tasks/task_parameters.py`
 

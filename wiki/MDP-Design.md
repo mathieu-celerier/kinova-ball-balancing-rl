@@ -21,25 +21,42 @@ With `timestep = 0.002 s` and `decimation = 5`, each history entry is separated 
 
 Joint:
 
-- relative joint positions
+- relative joint positions, computed as `q - q_0`
 - relative joint velocities
 - end-effector position in world frame
 - end-effector orientation in world frame
 - end-effector linear velocity in world frame
 - end-effector angular velocity in world frame
-- end-effector F/T wrench
+- end-effector F/T wrench, compensated for the static racquet-side weight
+- previous network action
 
 Cartesian:
 
-- end-effector position in world frame
-- end-effector orientation in world frame
+- end-effector position relative to the episode nominal pose, computed as `p - p_0`
+- end-effector orientation relative to the episode nominal orientation, computed as `q * conjugate(q_0)`
 - end-effector linear velocity in world frame
 - end-effector angular velocity in world frame
-- end-effector F/T wrench
+- end-effector F/T wrench, compensated for the static racquet-side weight
+- previous network action
+
+For the Cartesian actor, the observation term names remain `ee_pos` and `ee_quat`,
+but their values are relative to the nominal racquet pose instead of absolute
+world-frame pose values. The relative quaternion is normalized and kept with a
+positive scalar component for sign consistency.
+
+The F/T observation is built from the raw MuJoCo force and torque sensors minus
+the wrench induced by the weight of the bodies attached after the sensor:
+`FT_sensor_wrench`, `plate`, and `FT_sensor_imu`. No reset-time F/T bias is
+estimated in simulation.
 
 ### Critic Observations
 
-The critic receives privileged ball state:
+The critic receives the robot-side observation terms plus privileged ball state.
+Unlike the Cartesian actor, the critic keeps the absolute end-effector pose
+terms. This preserves full simulation state access for value learning while the
+deployed actor remains limited to the intended policy inputs.
+
+Privileged ball terms:
 
 - ball position in plate frame
 - ball linear velocity in plate frame
@@ -59,6 +76,9 @@ Training noise is injected into actor observations:
 - end-effector angular velocity: `[-0.1, 0.1]`
 - F/T wrench: `[-0.1, 0.1]`
 
+Previous actions are included as deterministic history terms and are not
+randomized by observation noise.
+
 ## Actions
 
 ### Joint-Space Variant
@@ -75,21 +95,24 @@ The resulting action scales are:
 
 ### Cartesian Variant
 
-The Cartesian variant uses `InitialFramePositionAction`, which anchors commands to the initial end-effector frame pose of the episode.
+The Cartesian variant uses `NullspaceTorqueAction`, which anchors commands to the initial racquet frame pose of the episode and outputs joint torques through the operational-space controller.
 
-The implemented command law is:
+The policy action is 6D and interpreted as relative pose deltas:
 
 ```text
-x_ref = x_0 + a * delta_pos_scale
+p_ref = p_0 + delta_pos_scale * a_pos
+R_ref = Exp(delta_ori_scale * a_rot) R_0
 ```
 
 with:
 
-- `x_0`: initial end-effector position
-- `a`: policy action
-- `delta_pos_scale = 0.04`
+- `p_0, R_0`: initial racquet pose at the start of the episode
+- `a_pos`: the first 3 action components
+- `a_rot`: the last 3 action components, interpreted in angle-axis form
+- `delta_pos_scale = 0.05`
+- `delta_ori_scale = 0.5`
 
-The code also stores the initial orientation reference, and the IK objective keeps that orientation active with `orientation_weight = 1.0`.
+Those pose targets are then tracked by the Cartesian torque controller with the null-space posture term described below.
 
 ## Reward Terms
 

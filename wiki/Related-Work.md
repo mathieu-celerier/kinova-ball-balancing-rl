@@ -104,7 +104,7 @@ Relation to this repo:
 
 - this repo follows a similar architectural idea,
 - the joint-space policy outputs joint-space references to position-controlled actuators,
-- the Cartesian policy outputs local end-effector position references that are turned into joint commands through differential IK,
+- the Cartesian policy outputs local end-effector pose deltas that are tracked by an operational-space torque controller,
 - in both cases, learning happens above the low-level actuator realization.
 
 ### Zhou et al. (2022)

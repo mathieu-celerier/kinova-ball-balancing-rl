@@ -379,6 +379,12 @@ def _actor_observation_terms(
     actor_terms = _shared_observation_terms(
         use_noise=behavior.use_observation_noise and not play, params=params
     )
+    if spec.variant == "cartesian":
+        actor_terms = {
+            **actor_terms,
+            "ee_pos": actor_terms["ee_pos_rel"],
+            "ee_quat": actor_terms["ee_quat_rel"],
+        }
     selected_term_names = tuple(
         name
         for name in spec.actor_terms
@@ -393,6 +399,8 @@ def _actor_observation_terms(
 
 def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTermCfg]:
     terms = _shared_observation_terms(use_noise=False, params=params)
+    terms.pop("ee_pos_rel")
+    terms.pop("ee_quat_rel")
     terms.update(
         {
             "actions": ObservationTermCfg(func=mdp.last_action),
@@ -506,6 +514,16 @@ def _shared_observation_terms(
             noise=ft_noise,
         ),
         "actions": ObservationTermCfg(func=mdp.last_action),
+        "ee_pos_rel": ObservationTermCfg(
+            func=bb_mdp.body_position_rel_nominal,
+            params={"asset_cfg": racquet_frame_cfg()},
+            noise=ee_pos_noise,
+        ),
+        "ee_quat_rel": ObservationTermCfg(
+            func=bb_mdp.body_orientation_rel_nominal,
+            params={"asset_cfg": racquet_frame_cfg()},
+            noise=ee_quat_noise,
+        ),
     }
 
 
