@@ -13,6 +13,7 @@ from mjlab_kinova.train_set import (
     _build_run_parameters,
     _load_training_set,
     _normalize_run,
+    _resolve_run_variant,
     _normalize_stop_policy,
     _resolve_run_cfg,
     _timestamped_project_name,
@@ -65,6 +66,7 @@ def main() -> int:
         relative_to=run_config_path.parent,
     )
     run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=0)
+    run_variant = _resolve_run_variant(training_set_cfg, raw_run_cfg, run_name=run_name)
     default_stop_policy = training_set_cfg.get(
         "default_stop_policy",
         training_set_cfg.get("default_stop_condition"),
@@ -96,7 +98,7 @@ def main() -> int:
 
     temp_config_path = _write_temp_params(params)
     cmd = _train_command(
-        variant=training_set_cfg["variant"],
+        variant=run_variant,
         extra_args=extra_train_args,
         require_executable=not args.dry_run,
     )
@@ -111,7 +113,7 @@ def main() -> int:
         env.pop("MJLAB_KINOVA_STOP_CONDITION", None)
 
     try:
-        print(f"[kinova-train-run] run={run_name} variant={training_set_cfg['variant']}")
+        print(f"[kinova-train-run] run={run_name} variant={run_variant}")
         print(f"[kinova-train-run] params={temp_config_path}")
         print(f"[kinova-train-run] wandb_project={project_name}")
         print(f"[kinova-train-run] wandb_run_id={env['WANDB_RUN_ID']}")

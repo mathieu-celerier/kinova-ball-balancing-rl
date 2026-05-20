@@ -28,6 +28,7 @@ TASK_ID_BY_VARIANT = {
     "joint": "Mjlab-BallBalancing-Kinova",
     "cartesian": "Mjlab-BallBalancing-Kinova-Cartesian",
 }
+MULTI_VARIANTS = {"multi", "mixed"}
 
 
 def _parse_args() -> tuple[argparse.Namespace, list[str]]:
@@ -99,10 +100,25 @@ def _load_training_set(path: Path) -> dict[str, Any]:
     if not isinstance(runs, list) or not runs:
         raise ValueError(f"`runs` must be a non-empty list in {path}")
     variant = config.get("variant")
-    if variant not in TASK_ID_BY_VARIANT:
-        valid = ", ".join(sorted(TASK_ID_BY_VARIANT))
+    if variant not in TASK_ID_BY_VARIANT and variant not in MULTI_VARIANTS:
+        valid = ", ".join(sorted((*TASK_ID_BY_VARIANT.keys(), *MULTI_VARIANTS)))
         raise ValueError(f"`variant` must be one of {valid} in {path}")
     return config
+
+
+def _resolve_run_variant(
+    training_set_cfg: dict[str, Any],
+    run_cfg: dict[str, Any],
+    *,
+    run_name: str,
+) -> str:
+    run_variant = run_cfg.get("variant", training_set_cfg["variant"])
+    if run_variant not in TASK_ID_BY_VARIANT:
+        valid = ", ".join(sorted(TASK_ID_BY_VARIANT))
+        raise ValueError(
+            f"Run `{run_name}` requires a concrete variant from {valid}, got {run_variant!r}"
+        )
+    return run_variant
 
 
 def _resolve_run_cfg(
@@ -326,6 +342,7 @@ def main() -> int:
             relative_to=training_set_path.parent,
         )
         run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
+        run_variant = _resolve_run_variant(training_set_cfg, raw_run_cfg, run_name=run_name)
         if selected_runs and run_name not in selected_runs:
             continue
         executed_runs += 1
@@ -357,7 +374,7 @@ def main() -> int:
         )
         temp_config_path = _write_temp_params(params)
         cmd = _train_command(
-            variant=training_set_cfg["variant"],
+            variant=run_variant,
             extra_args=extra_train_args,
             require_executable=not args.dry_run,
         )
@@ -372,7 +389,7 @@ def main() -> int:
             env.pop("MJLAB_KINOVA_STOP_CONDITION", None)
 
         try:
-            print(f"[kinova-train-set] run={run_name} variant={training_set_cfg['variant']}")
+            print(f"[kinova-train-set] run={run_name} variant={run_variant}")
             print(f"[kinova-train-set] params={temp_config_path}")
             print(f"[kinova-train-set] wandb_project={training_set_name}")
             print(f"[kinova-train-set] wandb_run_id={wandb_run_id}")

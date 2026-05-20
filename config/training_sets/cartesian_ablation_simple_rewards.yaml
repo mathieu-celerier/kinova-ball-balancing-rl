@@ -22,6 +22,100 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - cartesian_ablation_simple_rewards/all_randomization.yaml
-  - cartesian_ablation_simple_rewards/ball_properties_and_racquet_model.yaml
-  - cartesian_ablation_simple_rewards/no_rand.yaml
+  - name: no_rand
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        no_rand,
+      ]
+    overrides: {}
+  - name: obs_noise_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        obs_noise_only,
+      ]
+    overrides: {}
+  - name: ball_reset_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_reset_only,
+      ]
+    overrides: {}
+  - name: ball_reset_linear_velocity_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_reset_linear_velocity_only,
+      ]
+    overrides: {}
+  - name: ball_reset_angular_velocity_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_reset_angular_velocity_only,
+      ]
+    overrides: {}
+  - name: ball_properties_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_properties_only,
+      ]
+    overrides: {}
+  - name: pd_gains_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        pd_gains_only,
+      ]
+    overrides: {}
+  - name: robot_model_only
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        robot_model_only,
+      ]
+    overrides: {}
+  - name: ball_properties_and_racquet_model
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_properties_only,
+        racquet_model_only,
+      ]
+    overrides: {}
+  - name: no_model_rand
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        no_model_rand,
+      ]
+    overrides: {}
+  - name: all_except_robot_model
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        all_except_robot_model,
+      ]
+    overrides: {}
+  - name: all_randomization
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        all_randomization,
+      ]
+    overrides: {}

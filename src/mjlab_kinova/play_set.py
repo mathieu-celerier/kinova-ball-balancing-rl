@@ -12,6 +12,7 @@ from mjlab_kinova.train_set import (
     _build_run_parameters,
     _load_training_set,
     _normalize_run,
+    _resolve_run_variant,
     _resolve_run_cfg,
     _write_temp_params,
 )
@@ -65,7 +66,7 @@ def main() -> int:
     if extra_play_args and extra_play_args[0] == "--":
         extra_play_args = extra_play_args[1:]
 
-    matched_run: tuple[str, list[str], dict] | None = None
+    matched_run: tuple[str, str, list[str], dict] | None = None
     for index, raw_run_cfg in enumerate(training_set_cfg["runs"]):
         raw_run_cfg = _resolve_run_cfg(
             raw_run_cfg,
@@ -73,14 +74,15 @@ def main() -> int:
             relative_to=training_set_path.parent,
         )
         run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
+        run_variant = _resolve_run_variant(training_set_cfg, raw_run_cfg, run_name=run_name)
         if run_name == args.run_name:
-            matched_run = (run_name, preset_refs, overrides)
+            matched_run = (run_name, run_variant, preset_refs, overrides)
             break
 
     if matched_run is None:
         raise ValueError(f"Run `{args.run_name}` was not found in {training_set_path}")
 
-    run_name, preset_refs, overrides = matched_run
+    run_name, run_variant, preset_refs, overrides = matched_run
     params = _build_run_parameters(
         run_name=run_name,
         preset_refs=preset_refs,
@@ -95,7 +97,7 @@ def main() -> int:
         )
     temp_config_path = _write_temp_params(params)
     cmd = _play_command(
-        variant=training_set_cfg["variant"],
+        variant=run_variant,
         extra_args=extra_play_args,
         require_executable=not args.dry_run,
     )
@@ -103,7 +105,7 @@ def main() -> int:
     env["MJLAB_KINOVA_TASK_PARAMS"] = temp_config_path
 
     try:
-        print(f"[kinova-play-set] run={run_name} variant={training_set_cfg['variant']}")
+        print(f"[kinova-play-set] run={run_name} variant={run_variant}")
         print(f"[kinova-play-set] params={temp_config_path}")
         print(f"[kinova-play-set] cmd={' '.join(cmd)}")
         if args.dry_run:

@@ -6,3 +6,6 @@ training:
   randomize_robot_model: false
   randomize_null_space_init: true
   use_ball_kick: false
+
+joint_action:
+  use_nullspace_torque: true

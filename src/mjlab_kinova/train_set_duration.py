@@ -15,6 +15,7 @@ from mjlab_kinova.train_set import (
     _load_training_set,
     _merge_override_mappings,
     _normalize_run,
+    _resolve_run_variant,
     _normalize_stop_policy,
     _resolve_run_cfg,
     _timestamped_project_name,
@@ -137,6 +138,7 @@ def _benchmark_env_steps_per_second(
     training_set_path: Path,
     base_params,
     run_name: str,
+    run_variant: str,
     preset_refs: list[str],
     overrides: dict[str, Any],
     num_envs_override: int | None,
@@ -168,7 +170,7 @@ def _benchmark_env_steps_per_second(
     )
     temp_config_path = _write_temp_params(params)
     cmd = _train_command(
-        variant=training_set_cfg["variant"],
+        variant=run_variant,
         extra_args=["--agent.logger", "tensorboard", "--agent.max_iterations", "1"],
         require_executable=True,
     )
@@ -317,7 +319,8 @@ def main() -> int:
             relative_to=training_set_path.parent,
         )
         run_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
-        configured_runs.append((run_name, preset_refs, overrides, raw_run_cfg))
+        run_variant = _resolve_run_variant(training_set_cfg, raw_run_cfg, run_name=run_name)
+        configured_runs.append((run_name, run_variant, preset_refs, overrides, raw_run_cfg))
         configured_run_names.append(run_name)
 
     benchmark: BenchmarkResult | None = None
@@ -328,7 +331,7 @@ def main() -> int:
             selected_runs=selected_runs,
             benchmark_run=args.benchmark_run,
         )
-        for run_name, preset_refs, overrides, _raw_run_cfg in configured_runs:
+        for run_name, run_variant, preset_refs, overrides, _raw_run_cfg in configured_runs:
             if run_name != benchmark_run_name:
                 continue
             benchmark = _benchmark_env_steps_per_second(
@@ -337,6 +340,7 @@ def main() -> int:
                 training_set_path=training_set_path,
                 base_params=base_params,
                 run_name=run_name,
+                run_variant=run_variant,
                 preset_refs=preset_refs,
                 overrides=overrides,
                 num_envs_override=args.num_envs,
@@ -345,7 +349,7 @@ def main() -> int:
             break
 
     estimates: list[DurationEstimate] = []
-    for run_name, preset_refs, overrides, raw_run_cfg in configured_runs:
+    for run_name, run_variant, preset_refs, overrides, raw_run_cfg in configured_runs:
         if selected_runs and run_name not in selected_runs:
             continue
 
@@ -365,12 +369,12 @@ def main() -> int:
         )
         estimates.append(
             _estimate_run(
-                run_name=run_name,
-                params=params,
-                stop_policy=stop_policy,
-                num_envs_override=args.num_envs,
-                env_steps_per_second=env_steps_per_second,
-            )
+            run_name=run_name,
+            params=params,
+            stop_policy=stop_policy,
+            num_envs_override=args.num_envs,
+            env_steps_per_second=env_steps_per_second,
+        )
         )
 
     if selected_runs and not estimates:
