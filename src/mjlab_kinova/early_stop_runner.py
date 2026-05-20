@@ -103,13 +103,17 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
             combine = payload.get("combine", "all")
             min_iterations = int(payload.get("min_iterations", 0))
             max_iterations_raw = payload.get("max_iterations")
-            max_iterations = None if max_iterations_raw is None else int(max_iterations_raw)
+            max_iterations = (
+                None if max_iterations_raw is None else int(max_iterations_raw)
+            )
         else:
             criteria = (self._parse_criterion(payload),)
             combine = "all"
             min_iterations = int(payload.get("min_iterations", 0))
             max_iterations_raw = payload.get("max_iterations")
-            max_iterations = None if max_iterations_raw is None else int(max_iterations_raw)
+            max_iterations = (
+                None if max_iterations_raw is None else int(max_iterations_raw)
+            )
 
         if combine not in {"all", "any"}:
             raise ValueError("Stop policy `combine` must be `all` or `any`")
@@ -137,11 +141,7 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
         metrics: dict[str, float] = {}
 
         if self.logger.ep_extras:
-            extra_keys = {
-                key
-                for ep_info in self.logger.ep_extras
-                for key in ep_info
-            }
+            extra_keys = {key for ep_info in self.logger.ep_extras for key in ep_info}
             for key in extra_keys:
                 values: list[float] = []
                 for ep_info in self.logger.ep_extras:
@@ -165,17 +165,25 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
 
         if len(self.logger.rewbuffer) > 0:
             metrics["Train/mean_reward"] = float(statistics.mean(self.logger.rewbuffer))
-            metrics["Train/mean_episode_length"] = float(statistics.mean(self.logger.lenbuffer))
+            metrics["Train/mean_episode_length"] = float(
+                statistics.mean(self.logger.lenbuffer)
+            )
 
         if self.cfg["algorithm"]["rnd_cfg"]:
             metrics["Rnd/weight"] = float(rnd_weight if rnd_weight is not None else 0.0)
             if len(self.logger.erewbuffer) > 0:
-                metrics["Rnd/mean_extrinsic_reward"] = float(statistics.mean(self.logger.erewbuffer))
-                metrics["Rnd/mean_intrinsic_reward"] = float(statistics.mean(self.logger.irewbuffer))
+                metrics["Rnd/mean_extrinsic_reward"] = float(
+                    statistics.mean(self.logger.erewbuffer)
+                )
+                metrics["Rnd/mean_intrinsic_reward"] = float(
+                    statistics.mean(self.logger.irewbuffer)
+                )
 
         return metrics
 
-    def _should_stop(self, it: int, metrics: dict[str, float]) -> tuple[bool, str | None]:
+    def _should_stop(
+        self, it: int, metrics: dict[str, float]
+    ) -> tuple[bool, str | None]:
         policy = self._stop_policy
         if policy is None:
             return False, None
@@ -225,10 +233,14 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
             return False, None
 
         reasons = [reason for flag, reason in results if flag and reason is not None]
-        prefix = "early stop" if policy.combine == "all" else "early stop (any criterion)"
+        prefix = (
+            "early stop" if policy.combine == "all" else "early stop (any criterion)"
+        )
         return True, f"{prefix}: " + "; ".join(reasons)
 
-    def learn(self, num_learning_iterations: int, init_at_random_ep_len: bool = False) -> None:
+    def learn(
+        self, num_learning_iterations: int, init_at_random_ep_len: bool = False
+    ) -> None:
         if init_at_random_ep_len:
             self.env.episode_length_buf = torch.randint_like(
                 self.env.episode_length_buf, high=int(self.env.max_episode_length)
@@ -245,7 +257,10 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
 
         start_it = self.current_learning_iteration
         total_it = start_it + num_learning_iterations
-        if self._stop_policy is not None and self._stop_policy.max_iterations is not None:
+        if (
+            self._stop_policy is not None
+            and self._stop_policy.max_iterations is not None
+        ):
             total_it = min(total_it, start_it + self._stop_policy.max_iterations)
         stopped_early = False
         stop_reason: str | None = None
@@ -255,7 +270,9 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
             with torch.inference_mode():
                 for _ in range(self.cfg["num_steps_per_env"]):
                     actions = self.alg.act(obs)
-                    obs, rewards, dones, extras = self.env.step(actions.to(self.env.device))
+                    obs, rewards, dones, extras = self.env.step(
+                        actions.to(self.env.device)
+                    )
                     if self.cfg.get("check_for_nan", True):
                         check_nan(obs, rewards, dones)
                     obs, rewards, dones = (
@@ -264,8 +281,14 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
                         dones.to(self.device),
                     )
                     self.alg.process_env_step(obs, rewards, dones, extras)
-                    intrinsic_rewards = self.alg.intrinsic_rewards if self.cfg["algorithm"]["rnd_cfg"] else None
-                    self.logger.process_env_step(rewards, dones, extras, intrinsic_rewards)
+                    intrinsic_rewards = (
+                        self.alg.intrinsic_rewards
+                        if self.cfg["algorithm"]["rnd_cfg"]
+                        else None
+                    )
+                    self.logger.process_env_step(
+                        rewards, dones, extras, intrinsic_rewards
+                    )
 
                 stop = time.time()
                 collect_time = stop - start
@@ -278,7 +301,18 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
             learn_time = stop - start
             self.current_learning_iteration = it
 
-            rnd_weight = self.alg.rnd.weight if self.cfg["algorithm"]["rnd_cfg"] else None
+            rnd_weight = (
+                self.alg.rnd.weight if self.cfg["algorithm"]["rnd_cfg"] else None
+            )
+
+            metrics = self._collect_metrics(
+                loss_dict=loss_dict,
+                learning_rate=self.alg.learning_rate,
+                action_std=self.alg.get_policy().output_std,
+                rnd_weight=rnd_weight,
+            )
+            should_stop, stop_reason = self._should_stop(it, metrics)
+
             self.logger.log(
                 it=it,
                 start_it=start_it,
@@ -291,13 +325,17 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
                 rnd_weight=rnd_weight,
             )
 
-            metrics = self._collect_metrics(
-                loss_dict=loss_dict,
-                learning_rate=self.alg.learning_rate,
-                action_std=self.alg.get_policy().output_std,
-                rnd_weight=rnd_weight,
+            print(
+                "[DEBUG early-stop metrics]",
+                {
+                    k: metrics.get(k)
+                    for k in [
+                        "Train/mean_episode_length",
+                        "Episode_Termination/ball_fell_off",
+                    ]
+                },
+                flush=True,
             )
-            should_stop, stop_reason = self._should_stop(it, metrics)
             if should_stop:
                 print(f"[INFO]: {stop_reason}", flush=True)
                 stopped_early = True
@@ -307,7 +345,11 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
                 self.save(os.path.join(self.logger.log_dir, f"model_{it}.pt"))  # type: ignore[arg-type]
 
         if self.logger.writer is not None:
-            infos = {"early_stop_reason": stop_reason} if stopped_early and stop_reason else None
+            infos = (
+                {"early_stop_reason": stop_reason}
+                if stopped_early and stop_reason
+                else None
+            )
             self.save(
                 os.path.join(self.logger.log_dir, f"model_{self.current_learning_iteration}.pt"),  # type: ignore[arg-type]
                 infos=infos,
@@ -324,12 +366,16 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
             self.export_policy_to_onnx(str(policy_dir), filename)
             try:
                 run_name = (
-                    wandb.run.name if self.logger.logger_type == "wandb" and wandb.run else "local"
+                    wandb.run.name
+                    if self.logger.logger_type == "wandb" and wandb.run
+                    else "local"
                 )
                 metadata = get_base_metadata(self.env.unwrapped, run_name)
                 attach_metadata_to_onnx(str(onnx_path), metadata)
             except Exception as e:
-                print(f"[WARN] ONNX metadata attachment failed (training continues): {e}")
+                print(
+                    f"[WARN] ONNX metadata attachment failed (training continues): {e}"
+                )
             if self.logger.logger_type in ["wandb"] and self.cfg["upload_model"]:
                 wandb.save(str(onnx_path), base_path=str(policy_dir))
         except Exception as e:
