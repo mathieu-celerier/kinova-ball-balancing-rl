@@ -91,7 +91,6 @@ class PolicySpec:
 class TrainingBehavior:
     use_observation_noise: bool
     use_joint_pos_observation: bool
-    reset_ee_ft_bias: bool
     randomize_ball_reset: bool
     randomize_ball_properties: bool
     randomize_pd_gains: bool
@@ -136,7 +135,6 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
     "joint": TrainingBehavior(
         use_observation_noise=True,
         use_joint_pos_observation=True,
-        reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=True,
@@ -148,7 +146,6 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
     "cartesian": TrainingBehavior(
         use_observation_noise=True,
         use_joint_pos_observation=False,
-        reset_ee_ft_bias=True,
         randomize_ball_reset=True,
         randomize_ball_properties=True,
         randomize_pd_gains=True,
@@ -175,11 +172,6 @@ def _resolve_training_behavior(
             defaults.use_joint_pos_observation
             if training.use_joint_pos_observation is None
             else training.use_joint_pos_observation
-        ),
-        reset_ee_ft_bias=(
-            defaults.reset_ee_ft_bias
-            if training.reset_ee_ft_bias is None
-            else training.reset_ee_ft_bias
         ),
         randomize_ball_reset=(
             defaults.randomize_ball_reset
@@ -582,14 +574,6 @@ def _events_cfg(
                 "plate_asset_cfg": racquet_frame_cfg(),
             },
         ),
-        "clear_ball_for_ee_ft_bias_reset": EventTermCfg(
-            func=bb_mdp.clear_ball_for_ee_ft_bias_reset,
-            mode="reset",
-            params={
-                "ball_name": "ball",
-                "plate_asset_cfg": racquet_frame_cfg(),
-            },
-        ),
         "reset_ball": EventTermCfg(
             func=bb_mdp.reset_ball_on_plate,
             mode="reset",
@@ -620,12 +604,6 @@ def _events_cfg(
             mode="step",
         ),
     }
-
-    if behavior.reset_ee_ft_bias:
-        events["reset_ee_ft_bias"] = EventTermCfg(
-            func=bb_mdp.reset_ee_ft_bias,
-            mode="reset",
-        )
 
     events["reset_joint_torque_rate_state"] = EventTermCfg(
         func=bb_mdp.reset_joint_torque_rate_state,

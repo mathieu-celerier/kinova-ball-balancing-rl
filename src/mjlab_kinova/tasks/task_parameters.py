@@ -192,7 +192,6 @@ class TrainingParameters:
     use_observation_noise: bool | None = None
     use_joint_pos_observation: bool | None = None
     enable_ball_kick_in_play: bool = False
-    reset_ee_ft_bias: bool | None = None
     randomize_ball_reset: bool | None = None
     randomize_ball_properties: bool | None = None
     randomize_pd_gains: bool | None = None

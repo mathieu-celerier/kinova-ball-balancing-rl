@@ -134,7 +134,6 @@ training:
   use_observation_noise: null
   use_joint_pos_observation: null
   enable_ball_kick_in_play: false
-  reset_ee_ft_bias: null
   randomize_ball_reset: null
   randomize_ball_properties: null
   randomize_pd_gains: null

@@ -125,11 +125,8 @@ def log_first_step_after_reset(
         ball_vel_w = ball.data.root_link_vel_w[:, :3]
     ball_vel_plate = quat_apply_inverse(plate_quat_w, ball_vel_w)
     raw_wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
-    ft_bias = getattr(env, "_ee_ft_bias", None)
-    if ft_bias is None:
-        bias_wrench = raw_wrench
-    else:
-        bias_wrench = raw_wrench - ft_bias
+    racquet_weight_effect = ee_ft_racquet_weight_effect(env)
+    corrected_wrench = raw_wrench - racquet_weight_effect
     no_contact = ball_no_contact_mujoco(env=env)
     try:
         joint_term = env.action_manager.get_term("joint_pos")
@@ -162,7 +159,8 @@ def log_first_step_after_reset(
             f"{_format_debug_bool('ball_on_floor', bool(on_floor[env_id].item()))} "
             f"{_format_debug_bool('ball_fell_off', bool(fell_off[env_id].item()))} "
             f"ee_ft_raw={_format_debug_vec(raw_wrench[env_id])} "
-            f"ee_ft_bias={_format_debug_vec(bias_wrench[env_id])}"
+            f"ee_ft_racquet_weight={_format_debug_vec(racquet_weight_effect[env_id])} "
+            f"ee_ft_corrected={_format_debug_vec(corrected_wrench[env_id])}"
         )
         if release_pending is not None and release_steps_remaining is not None:
             msg += (
@@ -330,38 +328,106 @@ def body_linear_velocity_in_body_frame(
     return quat_apply_inverse(body_quat_w, body_vel_w)
 
 
+def _batched_model_field(
+    model_field: torch.Tensor,
+    env: "ManagerBasedRlEnv",
+    ids: torch.Tensor,
+) -> torch.Tensor:
+    """Return model field values for all environments and selected global ids."""
+    if model_field.ndim == 1:
+        return model_field[ids].unsqueeze(0).expand(env.num_envs, -1)
+    if model_field.ndim == 2:
+        return model_field[:, ids]
+    if model_field.ndim == 3:
+        return model_field[:, ids, :]
+    raise ValueError(f"Unsupported model field rank: {model_field.ndim}")
+
+
+def ee_ft_racquet_weight_effect(
+    env: "ManagerBasedRlEnv",
+    robot_name: str = "robot",
+    sensor_site_name: str = "ee_force",
+    load_body_names: tuple[str, ...] = ("FT_sensor_wrench", "plate", "FT_sensor_imu"),
+) -> torch.Tensor:
+    """Return the static wrench induced by the racquet-side weight at the F/T sensor."""
+    robot: Entity = env.scene[robot_name]
+
+    if not hasattr(env, "_ee_ft_weight_ids_cache"):
+        site_ids, _ = robot.find_sites(sensor_site_name, preserve_order=True)
+        if not site_ids:
+            raise ValueError(f"Site '{sensor_site_name}' was not found in '{robot_name}'.")
+
+        load_body_ids: list[int] = []
+        for body_name in load_body_names:
+            body_ids, _ = robot.find_bodies(body_name, preserve_order=True)
+            if not body_ids:
+                raise ValueError(f"Body '{body_name}' was not found in '{robot_name}'.")
+            load_body_ids.extend(body_ids)
+
+        load_local_ids = torch.tensor(
+            tuple(dict.fromkeys(int(body_id) for body_id in load_body_ids)),
+            device=env.device,
+            dtype=torch.long,
+        )
+        env._ee_ft_weight_ids_cache = {
+            "site_local_id": int(site_ids[0]),
+            "load_local_ids": load_local_ids,
+            "load_global_ids": robot.indexing.body_ids[load_local_ids].to(
+                device=env.device, dtype=torch.long
+            ),
+        }
+
+    cache = env._ee_ft_weight_ids_cache
+    site_local_id = cache["site_local_id"]
+    load_local_ids = cache["load_local_ids"]
+    load_global_ids = cache["load_global_ids"]
+
+    site_pos_w = robot.data.site_pos_w[:, site_local_id]
+    site_quat_w = robot.data.site_quat_w[:, site_local_id]
+    body_mass = _batched_model_field(env.sim.model.body_mass, env, load_global_ids)
+    gravity_w = torch.as_tensor(
+        env.sim.mj_model.opt.gravity,
+        device=env.device,
+        dtype=site_pos_w.dtype,
+    ).unsqueeze(0).unsqueeze(0)
+    gravity_force_w = body_mass.unsqueeze(-1) * gravity_w
+
+    if hasattr(env.sim.data, "xipos"):
+        body_com_w = env.sim.data.xipos[:, load_global_ids]
+    else:
+        body_pos_w = robot.data.body_link_pos_w[:, load_local_ids]
+        body_quat_w = robot.data.body_link_quat_w[:, load_local_ids]
+        body_ipos = _batched_model_field(env.sim.model.body_ipos, env, load_global_ids)
+        body_com_w = body_pos_w + quat_apply(
+            body_quat_w.reshape(-1, 4),
+            body_ipos.reshape(-1, 3),
+        ).reshape(env.num_envs, len(load_local_ids), 3)
+
+    lever_arm_w = body_com_w - site_pos_w.unsqueeze(1)
+    gravity_torque_w = torch.cross(lever_arm_w, gravity_force_w, dim=-1)
+    force_w = -torch.sum(gravity_force_w, dim=1)
+    torque_w = -torch.sum(gravity_torque_w, dim=1)
+    return torch.cat(
+        (
+            quat_apply_inverse(site_quat_w, force_w),
+            quat_apply_inverse(site_quat_w, torque_w),
+        ),
+        dim=-1,
+    )
+
+
 def ee_ft_wrench(
     env: "ManagerBasedRlEnv",
     force_sensor_name: str = "robot/EEForceSensor_fsensor",
     torque_sensor_name: str = "robot/EEForceSensor_tsensor",
 ) -> torch.Tensor:
-    """Return end-effector F/T wrench [Fx, Fy, Fz, Tx, Ty, Tz]."""
+    """Return F/T wrench with the static racquet-side weight removed."""
     force_sensor = env.scene[force_sensor_name]
     torque_sensor = env.scene[torque_sensor_name]
     assert isinstance(force_sensor, BuiltinSensor)
     assert isinstance(torque_sensor, BuiltinSensor)
     wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
-    if not hasattr(env, "_ee_ft_bias"):
-        env._ee_ft_bias = torch.zeros_like(wrench)
-
-    pending = getattr(env, "_ee_ft_bias_pending", None)
-    if pending is not None:
-        pending_ids = torch.nonzero(pending, as_tuple=False).squeeze(-1)
-        if pending_ids.numel() > 0:
-            env._ee_ft_bias[pending_ids] = wrench[pending_ids]
-            env._ee_ft_bias_pending[pending_ids] = False
-            if _reset_debug_enabled():
-                _ensure_reset_debug_state(env)
-                for env_id in pending_ids.tolist():
-                    print(
-                        "[RESET_DEBUG][FT_BIAS_LATCH] "
-                        f"env={env_id} "
-                        f"episode={int(env._reset_debug_episode_id[env_id].item())} "
-                        f"stored_bias={_format_debug_vec(env._ee_ft_bias[env_id])} "
-                        f"raw_wrench={_format_debug_vec(wrench[env_id])}"
-                    )
-
-    return wrench - env._ee_ft_bias
+    return wrench - ee_ft_racquet_weight_effect(env)
 
 
 def joint_torque_l2(
@@ -1381,87 +1447,6 @@ def body_external_force_norm(
     """Return the norm of the external force applied to a selected body."""
     force = body_external_force(env, asset_cfg)
     return torch.linalg.norm(force, dim=-1)
-
-
-def reset_ee_ft_bias(
-    env: "ManagerBasedRlEnv",
-    env_ids: torch.Tensor | None,
-    force_sensor_name: str = "robot/EEForceSensor_fsensor",
-    torque_sensor_name: str = "robot/EEForceSensor_tsensor",
-) -> None:
-    """Arm a bias reset to be captured from the first post-reset observation."""
-    env_ids = _as_env_ids(env, env_ids)
-    if env_ids.numel() == 0:
-        return
-
-    env.sim.forward()
-    force_sensor = env.scene[force_sensor_name]
-    torque_sensor = env.scene[torque_sensor_name]
-    assert isinstance(force_sensor, BuiltinSensor)
-    assert isinstance(torque_sensor, BuiltinSensor)
-    wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
-    if not hasattr(env, "_ee_ft_bias"):
-        env._ee_ft_bias = torch.zeros_like(wrench)
-    if not hasattr(env, "_ee_ft_bias_pending"):
-        env._ee_ft_bias_pending = torch.zeros(
-            env.num_envs, device=env.device, dtype=torch.bool
-        )
-    env._ee_ft_bias_pending[env_ids] = True
-
-    if _reset_debug_enabled():
-        for env_id in env_ids.tolist():
-            print(
-                "[RESET_DEBUG][FT_BIAS_ARM] "
-                f"env={env_id} "
-                f"episode={int(getattr(env, '_reset_debug_episode_id', torch.zeros(1, dtype=torch.long))[env_id].item()) + 1} "
-                f"pending=True "
-                f"raw_wrench={_format_debug_vec(wrench[env_id])}"
-            )
-
-
-def clear_ball_for_ee_ft_bias_reset(
-    env: "ManagerBasedRlEnv",
-    env_ids: torch.Tensor | None,
-    ball_name: str,
-    plate_asset_cfg: SceneEntityCfg,
-    clear_height: float = 0.30,
-) -> None:
-    """Move the ball away from the racquet before capturing the EE F/T zero."""
-    env_ids = _as_env_ids(env, env_ids)
-    if env_ids.numel() == 0:
-        return
-
-    env.sim.forward()
-
-    robot: Entity = env.scene[plate_asset_cfg.name]
-    ball: Entity = env.scene[ball_name]
-
-    plate_pos_w = robot.data.body_link_pos_w[env_ids][:, plate_asset_cfg.body_ids].squeeze(1)
-    plate_quat_w = robot.data.body_link_quat_w[env_ids][:, plate_asset_cfg.body_ids].squeeze(1)
-    clear_offset_plate = torch.zeros((len(env_ids), 3), device=env.device, dtype=plate_pos_w.dtype)
-    clear_offset_plate[:, 2] = clear_height
-    clear_pos_w = plate_pos_w + quat_apply(plate_quat_w, clear_offset_plate)
-
-    quat_w = torch.zeros((len(env_ids), 4), device=env.device, dtype=plate_pos_w.dtype)
-    quat_w[:, 0] = 1.0
-    pose = torch.cat((clear_pos_w, quat_w), dim=-1)
-    vel = torch.zeros((len(env_ids), 6), device=env.device, dtype=plate_pos_w.dtype)
-
-    ball.write_root_link_pose_to_sim(pose, env_ids=env_ids)
-    ball.write_root_link_velocity_to_sim(vel, env_ids=env_ids)
-    env.sim.forward()
-
-    if _reset_debug_enabled():
-        ball_pos_plate = ball_pos_in_plate_frame(env, ball_name, plate_asset_cfg)
-        ball_vel_plate = ball_lin_vel_in_plate_frame(env, ball_name, plate_asset_cfg)
-        for env_id in env_ids.tolist():
-            print(
-                "[RESET_DEBUG][BALL_CLEAR] "
-                f"env={env_id} "
-                f"episode={int(env._reset_debug_episode_id[env_id].item()) + 1} "
-                f"ball_plate={_format_debug_vec(ball_pos_plate[env_id])} "
-                f"ball_vel_plate={_format_debug_vec(ball_vel_plate[env_id])}"
-            )
 
 
 def reset_ball_on_plate(
