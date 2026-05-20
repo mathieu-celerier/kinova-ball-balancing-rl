@@ -37,12 +37,18 @@ This is where the code most directly meets the mechanics of the task.
 
 Implements the custom Cartesian action terms:
 
+- `JointNullspaceTorqueAction`, optional for the joint variant
 - `InitialFramePositionAction`, kept for position-reference style Cartesian actions
 - `NullspaceTorqueAction`, the current Cartesian ball-balancing action term
 
+`JointNullspaceTorqueAction` keeps the joint policy action interface
+`q_0 + S * a`, but applies it as a PD torque and adds a projected
+`racquet_frame` null-space posture torque.
+
 `NullspaceTorqueAction` interprets the 6D policy output as a pose delta around
 the episode's initial racquet frame, then tracks that target with an
-operational-space torque controller and a null-space posture term.
+operational-space torque controller and a null-space posture term whose target
+is resampled from the precomputed racquet-compatible null-space posture list.
 
 ## `src/mjlab_kinova/tasks/task_parameters.py`
 

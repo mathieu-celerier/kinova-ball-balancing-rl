@@ -4,14 +4,198 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+import mujoco_warp as mjwarp
 import torch
+import warp as wp
 
+from mjlab.actuator.actuator import TransmissionType
 from mjlab.envs.mdp.actions.differential_ik import (
     DifferentialIKAction,
     DifferentialIKActionCfg,
 )
+from mjlab.envs.mdp.actions.actions import BaseAction, BaseActionCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
 from mjlab.utils.lab_api.math import apply_delta_pose, compute_pose_error
+from mjlab.utils.lab_api.string import resolve_matching_names_values
+
+
+def _gain_tensor(
+    gain: float | dict[str, float],
+    target_names: list[str],
+    num_envs: int,
+    action_dim: int,
+    device: torch.device,
+) -> torch.Tensor:
+    if isinstance(gain, (float, int)):
+        return torch.full((num_envs, action_dim), float(gain), device=device)
+    values = torch.zeros(num_envs, action_dim, device=device)
+    index_list, _, value_list = resolve_matching_names_values(gain, target_names)
+    values[:, index_list] = torch.tensor(value_list, device=device)
+    return values
+
+
+@dataclass(kw_only=True)
+class JointNullspaceTorqueActionCfg(BaseActionCfg):
+    """Joint action interpreted as a PD torque plus racquet-frame null-space torque."""
+
+    frame_name: str
+    use_default_offset: bool = True
+    stiffness: float | dict[str, float] = 1.0
+    damping: float | dict[str, float] = 0.0
+    nullspace_stiffness: float | dict[str, float] = 0.0
+    nullspace_damping: float | dict[str, float] = 0.0
+    damping_pinv: float = 0.05
+    nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
+
+    def __post_init__(self) -> None:
+        self.transmission_type = TransmissionType.JOINT
+
+    def build(self, env: ManagerBasedRlEnv) -> "JointNullspaceTorqueAction":
+        return JointNullspaceTorqueAction(self, env)
+
+
+class JointNullspaceTorqueAction(BaseAction):
+    """Apply ``tau_rl + N tau_ns`` while preserving the joint-position action API."""
+
+    cfg: JointNullspaceTorqueActionCfg
+
+    def __init__(self, cfg: JointNullspaceTorqueActionCfg, env: ManagerBasedRlEnv):
+        super().__init__(cfg=cfg, env=env)
+        if cfg.use_default_offset:
+            self._offset = self._entity.data.default_joint_pos[:, self._target_ids].clone()
+
+        self._ctrl_ids = self._entity.indexing.ctrl_ids[self._target_ids]
+        self._joint_dof_ids = self._entity.indexing.joint_v_adr[self._target_ids]
+        body_ids, _ = self._entity.find_bodies(cfg.frame_name)
+        local_body_id = body_ids[0]
+        self._body_id = int(self._entity.indexing.body_ids[local_body_id].item())
+
+        self._kp = _gain_tensor(
+            cfg.stiffness, self._target_names, self.num_envs, self.action_dim, self.device
+        )
+        self._kd = _gain_tensor(
+            cfg.damping, self._target_names, self.num_envs, self.action_dim, self.device
+        )
+        self._kp_ns = _gain_tensor(
+            cfg.nullspace_stiffness,
+            self._target_names,
+            self.num_envs,
+            self.action_dim,
+            self.device,
+        )
+        self._kd_ns = _gain_tensor(
+            cfg.nullspace_damping,
+            self._target_names,
+            self.num_envs,
+            self.action_dim,
+            self.device,
+        )
+        self._q_ns = self._entity.data.default_joint_pos[:, self._target_ids].clone()
+        self._next_nullspace_resample_step = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.long
+        )
+
+        nworld = self.num_envs
+        nv = self._env.sim.mj_model.nv
+        with wp.ScopedDevice(self._env.sim.wp_device):
+            self._jacp_wp = wp.zeros((nworld, 3, nv), dtype=float)
+            self._jacr_wp = wp.zeros((nworld, 3, nv), dtype=float)
+            self._point_wp = wp.zeros(nworld, dtype=wp.vec3)
+            self._body_wp = wp.zeros(nworld, dtype=wp.int32)
+            self._body_wp.fill_(self._body_id)
+
+        self._jacp_torch = wp.to_torch(self._jacp_wp)
+        self._jacr_torch = wp.to_torch(self._jacr_wp)
+        self._point_torch = wp.to_torch(self._point_wp).view(nworld, 3)
+
+    def process_actions(self, actions: torch.Tensor):
+        super().process_actions(actions)
+        self._maybe_resample_nullspace_target()
+
+    def apply_actions(self) -> None:
+        q = self._entity.data.joint_pos[:, self._target_ids]
+        qd = self._entity.data.joint_vel[:, self._target_ids]
+        encoder_bias = self._entity.data.encoder_bias[:, self._target_ids]
+        q_rl = self._processed_actions - encoder_bias
+        tau_rl = self._kp * (q_rl - q) - self._kd * qd
+
+        tau_ns_ref = self._kp_ns * (self._q_ns - q) - self._kd_ns * qd
+
+        frame_pos = self._env.sim.data.xpos[:, self._body_id]
+        self._point_torch[:] = frame_pos
+        with wp.ScopedDevice(self._env.sim.wp_device):
+            mjwarp.jac(
+                self._env.sim.wp_model,
+                self._env.sim.wp_data,
+                self._jacp_wp,
+                self._jacr_wp,
+                self._point_wp,
+                self._body_wp,
+            )
+        jacp = self._jacp_torch[:, :, self._joint_dof_ids]
+        jacr = self._jacr_torch[:, :, self._joint_dof_ids]
+        jac = torch.cat((jacp, jacr), dim=1)
+        jjt = torch.einsum("bij,bkj->bik", jac, jac)
+        eye_task = torch.eye(jjt.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
+        damping = max(self.cfg.damping_pinv, 1e-6)
+        j_pinv = torch.matmul(
+            jac.transpose(1, 2),
+            torch.linalg.inv(jjt + (damping**2) * eye_task),
+        )
+        eye_joint = torch.eye(jac.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
+        null_proj = eye_joint - torch.matmul(j_pinv, jac)
+
+        tau_ns = torch.einsum("bij,bj->bi", null_proj, tau_ns_ref)
+        tau = tau_rl + tau_ns
+
+        effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
+        tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)
+        self._entity.set_joint_effort_target(tau, joint_ids=self._target_ids)
+
+    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+        super().reset(env_ids=env_ids)
+        if env_ids is None:
+            env_ids = slice(None)
+        self._q_ns[env_ids] = self._entity.data.default_joint_pos[env_ids][
+            :, self._target_ids
+        ]
+        self._next_nullspace_resample_step[env_ids] = 0
+
+    def _maybe_resample_nullspace_target(self) -> None:
+        samples = getattr(self._env, "_racquet_nullspace_samples", None)
+        sample_joint_ids = getattr(self._env, "_racquet_nullspace_sample_joint_ids", None)
+        if samples is None or sample_joint_ids is None:
+            return
+        if samples.numel() == 0 or not torch.equal(sample_joint_ids, self._target_ids):
+            return
+
+        current_step = self._env.episode_length_buf
+        resample_mask = current_step >= self._next_nullspace_resample_step
+        if not torch.any(resample_mask):
+            return
+
+        env_ids = torch.nonzero(resample_mask, as_tuple=False).squeeze(-1)
+        sample_ids = torch.randint(
+            samples.shape[0],
+            (env_ids.numel(),),
+            device=self.device,
+        )
+        self._q_ns[env_ids] = samples[sample_ids]
+
+        min_s, max_s = self.cfg.nullspace_resample_interval_s
+        min_steps = max(1, int(round(min_s / self._env.step_dt)))
+        max_steps = max(min_steps, int(round(max_s / self._env.step_dt)))
+        if max_steps == min_steps:
+            interval_steps = torch.full_like(env_ids, min_steps)
+        else:
+            interval_steps = torch.randint(
+                min_steps,
+                max_steps + 1,
+                (env_ids.numel(),),
+                device=self.device,
+                dtype=torch.long,
+            )
+        self._next_nullspace_resample_step[env_ids] = current_step[env_ids] + interval_steps
 
 
 @dataclass(kw_only=True)
@@ -72,6 +256,7 @@ class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
     damping_task: float = 0.05
     damping_null: float = 0.05
     damping_pinv: float = 0.05
+    nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 
     def __post_init__(self) -> None:
         self.use_relative_mode = True
@@ -101,9 +286,14 @@ class NullspaceTorqueAction(DifferentialIKAction):
         if local_body_matches.numel() != 1:
             raise RuntimeError("Failed to map Cartesian frame body to entity-local body index.")
         self._local_body_id = int(local_body_matches.item())
+        self._q_ns = self._posture_target.clone()
+        self._next_nullspace_resample_step = torch.zeros(
+            self.num_envs, device=self.device, dtype=torch.long
+        )
 
     def process_actions(self, actions: torch.Tensor) -> None:
         self._raw_actions[:] = actions
+        self._maybe_resample_nullspace_target()
         frame_pos, frame_quat = self._get_frame_pose()
         missing_anchor = ~self._initial_frame_ready
         if torch.any(missing_anchor):
@@ -161,12 +351,7 @@ class NullspaceTorqueAction(DifferentialIKAction):
 
         q = robot.data.joint_pos[:, self._joint_ids]
         qd = robot.data.joint_vel[:, self._joint_ids]
-        q_ns_full = getattr(self._env, "_racquet_nullspace_q_ns", None)
-        if q_ns_full is None:
-            q_ns = self._posture_target
-        else:
-            q_ns = q_ns_full[:, self._joint_ids]
-        null_ref = self.cfg.posture_weight * (q_ns - q) - self.cfg.damping_null * qd
+        null_ref = self.cfg.posture_weight * (self._q_ns - q) - self.cfg.damping_null * qd
 
         jjt = torch.einsum("bij,bkj->bik", jac, jac)
         eye_task = torch.eye(jjt.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
@@ -190,3 +375,41 @@ class NullspaceTorqueAction(DifferentialIKAction):
         if env_ids is None:
             env_ids = slice(None)
         self._initial_frame_ready[env_ids] = False
+        self._q_ns[env_ids] = self._posture_target[env_ids]
+        self._next_nullspace_resample_step[env_ids] = 0
+
+    def _maybe_resample_nullspace_target(self) -> None:
+        samples = getattr(self._env, "_racquet_nullspace_samples", None)
+        sample_joint_ids = getattr(self._env, "_racquet_nullspace_sample_joint_ids", None)
+        if samples is None or sample_joint_ids is None:
+            return
+        if samples.numel() == 0 or not torch.equal(sample_joint_ids, self._joint_ids):
+            return
+
+        current_step = self._env.episode_length_buf
+        resample_mask = current_step >= self._next_nullspace_resample_step
+        if not torch.any(resample_mask):
+            return
+
+        env_ids = torch.nonzero(resample_mask, as_tuple=False).squeeze(-1)
+        sample_ids = torch.randint(
+            samples.shape[0],
+            (env_ids.numel(),),
+            device=self.device,
+        )
+        self._q_ns[env_ids] = samples[sample_ids]
+
+        min_s, max_s = self.cfg.nullspace_resample_interval_s
+        min_steps = max(1, int(round(min_s / self._env.step_dt)))
+        max_steps = max(min_steps, int(round(max_s / self._env.step_dt)))
+        if max_steps == min_steps:
+            interval_steps = torch.full_like(env_ids, min_steps)
+        else:
+            interval_steps = torch.randint(
+                min_steps,
+                max_steps + 1,
+                (env_ids.numel(),),
+                device=self.device,
+                dtype=torch.long,
+            )
+        self._next_nullspace_resample_step[env_ids] = current_step[env_ids] + interval_steps

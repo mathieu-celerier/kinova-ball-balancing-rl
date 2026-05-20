@@ -83,7 +83,7 @@ randomized by observation noise.
 
 ### Joint-Space Variant
 
-The joint-space variant uses `JointPositionActionCfg` over all joints with:
+By default, the joint-space variant uses `JointPositionActionCfg` over all joints with:
 
 - per-joint scales derived from Kinova actuator limits using `0.25 * effort_limit / stiffness`
 - default offsets enabled
@@ -92,6 +92,23 @@ The resulting action scales are:
 
 - `joint_1` to `joint_4`: `0.59375`
 - `joint_5` to `joint_7`: `0.75`
+
+The optional `joint_action.use_nullspace_torque` mode switches the joint variant
+to effort actuators while keeping the same 7D policy interface and the same
+network-side target semantics:
+
+```text
+q_rl = q_0 + S * a
+tau = tau_rl + tau_ns
+tau_rl = Kp * (q_rl - q) - Kd * qdot
+tau_ns = N * (Kp_ns * (q_ns - q) - Kd_ns * qdot)
+```
+
+Here `N` is the damped Jacobian null-space projector of `racquet_frame`.
+`q_ns` is selected randomly from the pre-sampled list of racquet-compatible
+null-space postures and is resampled during the episode with
+`joint_action.nullspace_resample_interval_s`. The final torque command is
+clipped by the actuator effort limits.
 
 ### Cartesian Variant
 
@@ -113,6 +130,12 @@ with:
 - `delta_ori_scale = 0.5`
 
 Those pose targets are then tracked by the Cartesian torque controller with the null-space posture term described below.
+
+The Cartesian null-space posture target uses the same pre-sampled
+racquet-compatible posture list as the optional joint torque mode. It is
+resampled during the episode with
+`cartesian_action.nullspace_resample_interval_s`, so the null-space term does
+not stay tied to a single reset-time posture.
 
 ## Reward Terms
 

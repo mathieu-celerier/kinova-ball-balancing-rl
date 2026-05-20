@@ -125,14 +125,21 @@ KINOVA_EFFORT_ARTICULATION = EntityArticulationInfoCfg(
 )
 
 KINOVA_ACTION_SCALE: dict[str, float] = {}
+KINOVA_POSITION_STIFFNESS: dict[str, float] = {}
+KINOVA_POSITION_DAMPING: dict[str, float] = {}
 for actuator in KINOVA_ARTICULATION.actuators:
     assert isinstance(actuator, BuiltinPositionActuatorCfg)
     effort_limit = actuator.effort_limit
     stiffness = actuator.stiffness
+    damping = actuator.damping
     target_names = actuator.target_names_expr
     assert effort_limit is not None
+    assert stiffness is not None
+    assert damping is not None
     for name in target_names:
         KINOVA_ACTION_SCALE[name] = 0.25 * effort_limit / stiffness
+        KINOVA_POSITION_STIFFNESS[name] = stiffness
+        KINOVA_POSITION_DAMPING[name] = damping
 
 KINOVA_CFG = EntityCfg(
     spec_fn=get_spec,

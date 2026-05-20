@@ -1387,6 +1387,16 @@ def reset_joints_preserving_racquet_pose(
         pose_tol=pose_tol,
         rot_tol=rot_tol,
     )
+    all_samples = torch.cat(
+        (
+            negative_samples.flip(0),
+            default_sample_q.unsqueeze(0),
+            positive_samples,
+        ),
+        dim=0,
+    )
+    env._racquet_nullspace_sample_joint_ids = joint_ids.clone()
+    env._racquet_nullspace_samples = all_samples.to(env.device)
 
     alpha_coeff = sample_uniform(
         position_range[0],

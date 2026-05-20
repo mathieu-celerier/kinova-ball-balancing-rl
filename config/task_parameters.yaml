@@ -20,16 +20,24 @@ observation_noise:
 
 joint_action:
   use_default_offset: true
+  use_nullspace_torque: false
+  stiffness: [40.0, 40.0, 40.0, 40.0, 15.0, 15.0, 15.0]
+  damping: [15.0, 15.0, 15.0, 15.0, 8.5, 8.5, 8.5]
+  nullspace_stiffness: [40.0, 40.0, 40.0, 40.0, 15.0, 15.0, 15.0]
+  nullspace_damping: [15.0, 15.0, 15.0, 15.0, 8.5, 8.5, 8.5]
+  damping_pinv: 0.001
+  nullspace_resample_interval_s: [0.25, 1.0]
 
 cartesian_action:
   delta_pos_scale: 0.05
   delta_ori_scale: 0.5
   damping_task: 8.0
   damping_null: 5.0
-  damping_pinv: 0.0
+  damping_pinv: 0.001
   position_weight: 50.0
   orientation_weight: 50.0
   posture_weight: 20.0
+  nullspace_resample_interval_s: [0.25, 1.0]
 
 ball_reset:
   xy_range: [-0.02, 0.02]

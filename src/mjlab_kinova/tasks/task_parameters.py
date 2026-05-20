@@ -52,6 +52,13 @@ class ObservationNoiseParameters:
 @dataclass(frozen=True)
 class JointActionParameters:
     use_default_offset: bool = True
+    use_nullspace_torque: bool = False
+    stiffness: tuple[float, ...] = (40.0, 40.0, 40.0, 40.0, 15.0, 15.0, 15.0)
+    damping: tuple[float, ...] = (15.0, 15.0, 15.0, 15.0, 8.5, 8.5, 8.5)
+    nullspace_stiffness: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    nullspace_damping: tuple[float, ...] = (0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
+    damping_pinv: float = 0.05
+    nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 
 
 @dataclass(frozen=True)
@@ -64,6 +71,7 @@ class CartesianActionParameters:
     position_weight: float = 1.0
     orientation_weight: float = 1.0
     posture_weight: float = 0.03
+    nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 
 
 @dataclass(frozen=True)

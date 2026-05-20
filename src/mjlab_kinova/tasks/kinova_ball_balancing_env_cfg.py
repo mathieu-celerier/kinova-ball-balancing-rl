@@ -26,10 +26,12 @@ from mjlab_kinova.robot.kinova_constants import (
     KINOVA_ACTION_SCALE,
     KINOVA_CFG,
     KINOVA_EFFORT_CFG,
+    KINOVA_POSITION_DAMPING,
+    KINOVA_POSITION_STIFFNESS,
 )
 
 from . import ball_balancing_mdp as bb_mdp
-from .policy_actions import NullspaceTorqueActionCfg
+from .policy_actions import JointNullspaceTorqueActionCfg, NullspaceTorqueActionCfg
 from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
 PolicyVariant = Literal["joint", "cartesian"]
@@ -75,8 +77,10 @@ def ball_body_cfg() -> SceneEntityCfg:
     return SceneEntityCfg("ball", body_names=("ball",))
 
 
-def _robot_cfg_for_variant(variant: PolicyVariant) -> EntityCfg:
-    return KINOVA_EFFORT_CFG if variant == "cartesian" else KINOVA_CFG
+def _robot_cfg_for_variant(variant: PolicyVariant, params: TaskParameters) -> EntityCfg:
+    if variant == "cartesian" or params.joint_action.use_nullspace_torque:
+        return KINOVA_EFFORT_CFG
+    return KINOVA_CFG
 
 
 @dataclass(frozen=True)
@@ -280,7 +284,7 @@ def kinova_ball_balancing_env_cfg(
         scene=SceneCfg(
             terrain=TerrainEntityCfg(terrain_type="plane"),
             entities={
-                "robot": _robot_cfg_for_variant(variant),
+                "robot": _robot_cfg_for_variant(variant, params),
                 "ball": _ball_entity_cfg(params),
             },
             num_envs=params.simulation.num_envs,
@@ -288,7 +292,7 @@ def kinova_ball_balancing_env_cfg(
         ),
         observations=observations,
         actions=_actions_cfg(spec, params),
-        events=_events_cfg(behavior, play, params),
+        events=_events_cfg(spec, behavior, play, params),
         rewards=_rewards_cfg(params),
         terminations=_terminations_cfg(params),
         viewer=ViewerConfig(
@@ -467,6 +471,17 @@ def _noise_cfg(use_noise: bool, noise_range) -> Unoise | None:
     return Unoise(n_min=noise_range.min, n_max=noise_range.max)
 
 
+def _joint_gain_dict(values: tuple[float, ...], fallback: dict[str, float]) -> dict[str, float]:
+    joint_names = tuple(KINOVA_ACTION_SCALE.keys())
+    if not values:
+        return fallback
+    if len(values) != len(joint_names):
+        raise ValueError(
+            f"Expected {len(joint_names)} joint gain values, got {len(values)}."
+        )
+    return dict(zip(joint_names, values, strict=True))
+
+
 def _shared_observation_terms(
     use_noise: bool, params: TaskParameters
 ) -> dict[str, ObservationTermCfg]:
@@ -529,12 +544,37 @@ def _shared_observation_terms(
 
 def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTermCfg]:
     if spec.action_kind == "joint":
+        action = params.joint_action
+        if action.use_nullspace_torque:
+            return {
+                "joint_pos": JointNullspaceTorqueActionCfg(
+                    entity_name="robot",
+                    actuator_names=(".*",),
+                    frame_name="racquet_frame",
+                    scale=KINOVA_ACTION_SCALE,
+                    use_default_offset=action.use_default_offset,
+                    stiffness=_joint_gain_dict(
+                        action.stiffness, KINOVA_POSITION_STIFFNESS
+                    ),
+                    damping=_joint_gain_dict(action.damping, KINOVA_POSITION_DAMPING),
+                    nullspace_stiffness=_joint_gain_dict(
+                        action.nullspace_stiffness,
+                        dict.fromkeys(KINOVA_ACTION_SCALE.keys(), 0.0),
+                    ),
+                    nullspace_damping=_joint_gain_dict(
+                        action.nullspace_damping,
+                        dict.fromkeys(KINOVA_ACTION_SCALE.keys(), 0.0),
+                    ),
+                    damping_pinv=action.damping_pinv,
+                    nullspace_resample_interval_s=action.nullspace_resample_interval_s,
+                )
+            }
         return {
             "joint_pos": JointPositionActionCfg(
                 entity_name="robot",
                 actuator_names=(".*",),
                 scale=KINOVA_ACTION_SCALE,
-                use_default_offset=params.joint_action.use_default_offset,
+                use_default_offset=action.use_default_offset,
             )
         }
 
@@ -554,12 +594,13 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
             orientation_weight=action.orientation_weight,
             posture_weight=action.posture_weight,
             posture_target=KINOVA_CFG.init_state.joint_pos,
+            nullspace_resample_interval_s=action.nullspace_resample_interval_s,
         )
     }
 
 
 def _events_cfg(
-    behavior: TrainingBehavior, play: bool, params: TaskParameters
+    spec: PolicySpec, behavior: TrainingBehavior, play: bool, params: TaskParameters
 ) -> dict[str, EventTermCfg]:
     randomization = params.randomization
     ball_reset = params.ball_reset
@@ -649,7 +690,10 @@ def _events_cfg(
             },
         )
 
-    if behavior.randomize_pd_gains:
+    uses_joint_nullspace_torque = (
+        spec.action_kind == "joint" and params.joint_action.use_nullspace_torque
+    )
+    if behavior.randomize_pd_gains and not uses_joint_nullspace_torque:
         events["randomize_pd_gains"] = EventTermCfg(
             func=bb_mdp.randomize_pd_gains,
             mode="reset",
