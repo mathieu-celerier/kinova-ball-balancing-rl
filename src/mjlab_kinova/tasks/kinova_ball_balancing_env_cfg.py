@@ -114,13 +114,21 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
             "ee_vel",
             "ee_ang_vel",
             "ee_ft_wrench",
+            "actions",
         ),
     ),
     "cartesian": PolicySpec(
         variant="cartesian",
         experiment_name="kinova_ball_balancing_cartesian",
         action_kind="cartesian",
-        actor_terms=("ee_pos", "ee_quat", "ee_vel", "ee_ang_vel", "ee_ft_wrench"),
+        actor_terms=(
+            "ee_pos",
+            "ee_quat",
+            "ee_vel",
+            "ee_ang_vel",
+            "ee_ft_wrench",
+            "actions",
+        ),
     ),
 }
 
@@ -472,7 +480,7 @@ def _shared_observation_terms(
     ft_noise = _noise_cfg(use_noise, noise.ee_ft_wrench)
     return {
         "joint_pos": ObservationTermCfg(
-            func=mdp.joint_pos_rel,
+            func=bb_mdp.joint_pos_rel,
             params={"asset_cfg": robot_joints_cfg()},
             noise=joint_pos_noise,
         ),
@@ -505,6 +513,7 @@ def _shared_observation_terms(
             func=bb_mdp.ee_ft_wrench,
             noise=ft_noise,
         ),
+        "actions": ObservationTermCfg(func=mdp.last_action),
     }
 
 

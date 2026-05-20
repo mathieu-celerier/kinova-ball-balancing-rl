@@ -38,12 +38,6 @@
 
   <worldbody>
     <light name="top" pos="0 0 2" mode="trackcom" />
-    <geom name="termination_floor_height_visual" type="plane"
-      pos="0 0 0.05"
-      size="0 0 0.001"
-      contype="0" conaffinity="0"
-      group="2"
-      rgba="0.2 0.7 0.95 0.08" />
 
     <body name="base_link" pos="0 0 0" quat="1 0 0 0">
       <geom mesh="base_link" />
@@ -118,34 +112,6 @@
                                 solimp="0.95 0.995 0.001 0.5 2" />
                               <body name="racquet_frame" pos="0 -0.125 0"
                                 euler="0 0.78539816339 0">
-                                <geom name="termination_xy_visual" type="cylinder"
-                                  size="0.16 0.001"
-                                  pos="0 0 0"
-                                  density="0"
-                                  contype="0" conaffinity="0"
-                                  group="2"
-                                  rgba="0.95 0.75 0.1 0.18" />
-                                <geom name="termination_min_height_visual" type="cylinder"
-                                  size="0.16 0.001"
-                                  pos="0 0 -0.06"
-                                  density="0"
-                                  contype="0" conaffinity="0"
-                                  group="2"
-                                  rgba="0.95 0.2 0.2 0.18" />
-                                <geom name="termination_max_height_visual" type="cylinder"
-                                  size="0.16 0.001"
-                                  pos="0 0 0.12"
-                                  density="0"
-                                  contype="0" conaffinity="0"
-                                  group="2"
-                                  rgba="0.2 0.95 0.35 0.18" />
-                                <geom name="termination_soft_height_visual" type="cylinder"
-                                  size="0.16 0.001"
-                                  pos="0 0 0.06"
-                                  density="0"
-                                  contype="0" conaffinity="0"
-                                  group="2"
-                                  rgba="0.2 0.95 0.95 0.14" />
                               </body>
                             </body>
                             <body name="FT_sensor_imu" pos="0.0 0.0 0.0093">

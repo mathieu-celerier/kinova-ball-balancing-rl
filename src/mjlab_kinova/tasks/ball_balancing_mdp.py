@@ -267,6 +267,18 @@ def joint_accelerations(
     return asset.data.joint_acc[:, asset_cfg.joint_ids]
 
 
+def joint_pos_rel(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Return selected joint positions relative to the nominal configuration q0."""
+    asset: Entity = env.scene[asset_cfg.name]
+    return (
+        asset.data.joint_pos[:, asset_cfg.joint_ids]
+        - asset.data.default_joint_pos[:, asset_cfg.joint_ids]
+    )
+
+
 def body_position_w(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
