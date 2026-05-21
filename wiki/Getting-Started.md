@@ -135,6 +135,18 @@ uv run kinova-play-set config/training_sets/joint_randomization_ablation.yaml \
 
 Add `--ball-kick` before the `--` separator to replay with interval disturbance kicks enabled.
 
+For joint replay, you can force the null-space torque term on or off with:
+
+```bash
+uv run kinova-play-set config/training_sets/joint_randomization_ablation.yaml \
+  --run null_space_only \
+  --nullspace-torque \
+  -- --agent random --num-envs 1 --viewer native
+```
+
+Use `--no-nullspace-torque` to explicitly disable it. The default remains whatever is encoded in the run parameters.
+The same flags are available on `kinova-play-run`.
+
 To resolve play parameters from one extracted single-run config:
 
 ```bash

@@ -44,6 +44,15 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
         action="store_true",
         help="Enable ball-kick interval disturbances while replaying.",
     )
+    parser.add_argument(
+        "--nullspace-torque",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Force the joint replay action to use or skip null-space torque. "
+            "Defaults to the training-set configuration."
+        ),
+    )
     args, play_args = parser.parse_known_args()
     return args, play_args
 
@@ -55,6 +64,22 @@ def _play_command(*, variant: str, extra_args: list[str], require_executable: bo
             raise RuntimeError("Could not find `play` on PATH. Run this command through `uv run`.")
         play_exe = "play"
     return [play_exe, PLAY_TASK_ID_BY_VARIANT[variant], *extra_args]
+
+
+def _apply_play_overrides(*, variant: str, params, ball_kick: bool, nullspace_torque: bool | None):
+    if nullspace_torque is not None:
+        if variant != "joint":
+            raise ValueError("--nullspace-torque only applies to the joint replay variant")
+        params = replace(
+            params,
+            joint_action=replace(params.joint_action, use_nullspace_torque=nullspace_torque),
+        )
+    if ball_kick:
+        params = replace(
+            params,
+            training=replace(params.training, enable_ball_kick_in_play=True),
+        )
+    return params
 
 
 def main() -> int:
@@ -90,11 +115,12 @@ def main() -> int:
         training_set_path=training_set_path,
         base_params=base_params,
     )
-    if args.ball_kick:
-        params = replace(
-            params,
-            training=replace(params.training, enable_ball_kick_in_play=True),
-        )
+    params = _apply_play_overrides(
+        variant=run_variant,
+        params=params,
+        ball_kick=args.ball_kick,
+        nullspace_torque=args.nullspace_torque,
+    )
     temp_config_path = _write_temp_params(params)
     cmd = _play_command(
         variant=run_variant,

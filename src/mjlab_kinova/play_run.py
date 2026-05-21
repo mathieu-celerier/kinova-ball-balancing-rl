@@ -4,10 +4,10 @@ import argparse
 import os
 import subprocess
 import sys
-from dataclasses import replace
 from pathlib import Path
 
 from mjlab_kinova.play_set import _play_command
+from mjlab_kinova.play_set import _apply_play_overrides
 from mjlab_kinova.train_set import (
     _base_parameters,
     _build_run_parameters,
@@ -36,6 +36,15 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
         "--ball-kick",
         action="store_true",
         help="Enable ball-kick interval disturbances while replaying.",
+    )
+    parser.add_argument(
+        "--nullspace-torque",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help=(
+            "Force the joint replay action to use or skip null-space torque. "
+            "Defaults to the training-set configuration."
+        ),
     )
     args, play_args = parser.parse_known_args()
     return args, play_args
@@ -70,11 +79,12 @@ def main() -> int:
         training_set_path=run_config_path,
         base_params=base_params,
     )
-    if args.ball_kick:
-        params = replace(
-            params,
-            training=replace(params.training, enable_ball_kick_in_play=True),
-        )
+    params = _apply_play_overrides(
+        variant=run_variant,
+        params=params,
+        ball_kick=args.ball_kick,
+        nullspace_torque=args.nullspace_torque,
+    )
 
     temp_config_path = _write_temp_params(params)
     cmd = _play_command(
