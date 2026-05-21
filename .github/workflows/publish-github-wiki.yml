@@ -1,0 +1,66 @@
+name: Publish GitHub Wiki
+
+on:
+  workflow_dispatch:
+    inputs:
+      delete_orphans:
+        description: Remove pages from the wiki checkout that no longer exist in `wiki/`
+        required: false
+        type: boolean
+        default: true
+  push:
+    branches:
+      - main
+    paths:
+      - docs/**
+      - src/**
+      - config/**
+      - scripts/export_github_wiki.py
+      - scripts/sync_github_wiki.sh
+      - README.md
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Verify wiki push token
+        env:
+          WIKI_PUSH_TOKEN: ${{ secrets.WIKI_PUSH_TOKEN }}
+        run: |
+          if [ -z "${WIKI_PUSH_TOKEN:-}" ]; then
+            echo "Missing secret WIKI_PUSH_TOKEN."
+            echo "Create a personal access token with wiki write access and add it as a repository secret."
+            exit 1
+          fi
+
+      - name: Clone GitHub Wiki repository
+        env:
+          WIKI_PUSH_TOKEN: ${{ secrets.WIKI_PUSH_TOKEN }}
+        run: |
+          git clone "https://x-access-token:${WIKI_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" .wiki_checkout
+
+      - name: Sync generated wiki content
+        if: github.event_name == 'workflow_dispatch' && inputs.delete_orphans == false
+        run: bash scripts/sync_github_wiki.sh --no-delete .wiki_checkout
+
+      - name: Sync generated wiki content
+        if: github.event_name != 'workflow_dispatch' || inputs.delete_orphans != false
+        run: bash scripts/sync_github_wiki.sh .wiki_checkout
+
+      - name: Commit and push wiki updates
+        working-directory: .wiki_checkout
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No wiki changes to publish."
+            exit 0
+          fi
+          git commit -m "Update wiki from main repository"
+          git push
