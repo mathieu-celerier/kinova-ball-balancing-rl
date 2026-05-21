@@ -34,7 +34,7 @@ jobs:
         run: |
           if [ -z "${WIKI_PUSH_TOKEN:-}" ]; then
             echo "Missing secret WIKI_PUSH_TOKEN."
-            echo "Create a personal access token with wiki write access and add it as a repository secret."
+            echo "Create a classic personal access token with the repo scope and add it as a repository secret."
             exit 1
           fi
 
@@ -42,18 +42,18 @@ jobs:
         env:
           WIKI_PUSH_TOKEN: ${{ secrets.WIKI_PUSH_TOKEN }}
         run: |
-          git clone "https://x-access-token:${WIKI_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" .wiki_checkout
+          git clone "https://x-access-token:${WIKI_PUSH_TOKEN}@github.com/${GITHUB_REPOSITORY}.wiki.git" "${RUNNER_TEMP}/wiki_checkout"
 
       - name: Sync generated wiki content
         if: github.event_name == 'workflow_dispatch' && inputs.delete_orphans == false
-        run: bash scripts/sync_github_wiki.sh --no-delete .wiki_checkout
+        run: bash scripts/sync_github_wiki.sh --no-delete "${RUNNER_TEMP}/wiki_checkout"
 
       - name: Sync generated wiki content
         if: github.event_name != 'workflow_dispatch' || inputs.delete_orphans != false
-        run: bash scripts/sync_github_wiki.sh .wiki_checkout
+        run: bash scripts/sync_github_wiki.sh "${RUNNER_TEMP}/wiki_checkout"
 
       - name: Commit and push wiki updates
-        working-directory: .wiki_checkout
+        working-directory: ${{ runner.temp }}/wiki_checkout
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"

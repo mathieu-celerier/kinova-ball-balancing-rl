@@ -130,9 +130,21 @@ bash scripts/sync_github_wiki.sh --no-delete /path/to/your/repo.wiki
 
 The script regenerates `wiki/`, then syncs `wiki/` into the separate wiki
 checkout. It writes `Home.md`, `_Sidebar.md`, and the rest of the wiki pages in
-a format GitHub Wiki can render directly.
+a format GitHub Wiki can render directly, while preserving the target checkout's
+`.git` directory.
 
 If you prefer not to do that manually, the repository also includes a GitHub
 Actions workflow at `.github/workflows/publish-github-wiki.yml`. It republishes
-`wiki/` to the GitHub Wiki checkout when triggered, but it requires a repository
-secret named `WIKI_PUSH_TOKEN` with write access to the wiki repository.
+`wiki/` to the GitHub Wiki checkout when triggered.
+
+Recommended setup for that workflow:
+
+1. On GitHub, go to `Settings` -> `Developer settings` -> `Personal access tokens` -> `Tokens (classic)`.
+2. Create a new classic token with the `repo` scope.
+3. In this repository, go to `Settings` -> `Secrets and variables` -> `Actions`.
+4. Add a new repository secret named `WIKI_PUSH_TOKEN` and paste the token value.
+5. Run the `Publish GitHub Wiki` workflow from the Actions tab, or let it run automatically on pushes to `main`.
+
+The workflow currently assumes a classic PAT because GitHub's documentation is
+clear that a PAT can be used for HTTPS Git operations, but much less clear about
+how fine-grained PAT permissions apply to the separate `.wiki.git` repository.

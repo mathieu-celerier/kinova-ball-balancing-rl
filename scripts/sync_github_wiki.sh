@@ -45,7 +45,7 @@ mkdir -p "$target_dir"
 
 python3 "$repo_root/scripts/export_github_wiki.py" --output-dir "$repo_root/wiki"
 if [[ "$delete_mode" -eq 1 ]]; then
-  rsync -av --delete "$repo_root/wiki/" "$target_dir/"
+  rsync -av --delete --exclude=.git/ "$repo_root/wiki/" "$target_dir/"
 else
-  rsync -av "$repo_root/wiki/" "$target_dir/"
+  rsync -av --exclude=.git/ "$repo_root/wiki/" "$target_dir/"
 fi
