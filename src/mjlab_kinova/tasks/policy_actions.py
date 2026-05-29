@@ -108,6 +108,26 @@ class JointNullspaceTorqueAction(BaseAction):
         self._jacr_torch = wp.to_torch(self._jacr_wp)
         self._point_torch = wp.to_torch(self._point_wp).view(nworld, 3)
 
+    def _sample_next_nullspace_resample_step(
+        self, env_ids: torch.Tensor | slice | None = None
+    ) -> torch.Tensor:
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+        elif isinstance(env_ids, slice):
+            env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)[env_ids]
+        min_s, max_s = self.cfg.nullspace_resample_interval_s
+        min_steps = max(1, int(round(min_s / self._env.step_dt)))
+        max_steps = max(min_steps, int(round(max_s / self._env.step_dt)))
+        if max_steps == min_steps:
+            return torch.full((env_ids.numel(),), min_steps, device=self.device, dtype=torch.long)
+        return torch.randint(
+            min_steps,
+            max_steps + 1,
+            (env_ids.numel(),),
+            device=self.device,
+            dtype=torch.long,
+        )
+
     def process_actions(self, actions: torch.Tensor):
         super().process_actions(actions)
         self._maybe_resample_nullspace_target()
@@ -156,10 +176,16 @@ class JointNullspaceTorqueAction(BaseAction):
         super().reset(env_ids=env_ids)
         if env_ids is None:
             env_ids = slice(None)
-        self._q_ns[env_ids] = self._entity.data.default_joint_pos[env_ids][
-            :, self._target_ids
-        ]
-        self._next_nullspace_resample_step[env_ids] = 0
+        q_ns = getattr(self._env, "_racquet_nullspace_q_ns", None)
+        if q_ns is not None and q_ns.shape == self._entity.data.joint_pos.shape:
+            self._q_ns[env_ids] = q_ns[env_ids][:, self._target_ids]
+        else:
+            self._q_ns[env_ids] = self._entity.data.default_joint_pos[env_ids][
+                :, self._target_ids
+            ]
+        self._next_nullspace_resample_step[env_ids] = self._sample_next_nullspace_resample_step(
+            env_ids
+        )
 
     def _maybe_resample_nullspace_target(self) -> None:
         samples = getattr(self._env, "_racquet_nullspace_samples", None)
@@ -182,19 +208,7 @@ class JointNullspaceTorqueAction(BaseAction):
         )
         self._q_ns[env_ids] = samples[sample_ids]
 
-        min_s, max_s = self.cfg.nullspace_resample_interval_s
-        min_steps = max(1, int(round(min_s / self._env.step_dt)))
-        max_steps = max(min_steps, int(round(max_s / self._env.step_dt)))
-        if max_steps == min_steps:
-            interval_steps = torch.full_like(env_ids, min_steps)
-        else:
-            interval_steps = torch.randint(
-                min_steps,
-                max_steps + 1,
-                (env_ids.numel(),),
-                device=self.device,
-                dtype=torch.long,
-            )
+        interval_steps = self._sample_next_nullspace_resample_step(env_ids)
         self._next_nullspace_resample_step[env_ids] = current_step[env_ids] + interval_steps
 
 
@@ -291,6 +305,26 @@ class NullspaceTorqueAction(DifferentialIKAction):
             self.num_envs, device=self.device, dtype=torch.long
         )
 
+    def _sample_next_nullspace_resample_step(
+        self, env_ids: torch.Tensor | slice | None = None
+    ) -> torch.Tensor:
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)
+        elif isinstance(env_ids, slice):
+            env_ids = torch.arange(self.num_envs, device=self.device, dtype=torch.long)[env_ids]
+        min_s, max_s = self.cfg.nullspace_resample_interval_s
+        min_steps = max(1, int(round(min_s / self._env.step_dt)))
+        max_steps = max(min_steps, int(round(max_s / self._env.step_dt)))
+        if max_steps == min_steps:
+            return torch.full((env_ids.numel(),), min_steps, device=self.device, dtype=torch.long)
+        return torch.randint(
+            min_steps,
+            max_steps + 1,
+            (env_ids.numel(),),
+            device=self.device,
+            dtype=torch.long,
+        )
+
     def process_actions(self, actions: torch.Tensor) -> None:
         self._raw_actions[:] = actions
         self._maybe_resample_nullspace_target()
@@ -375,8 +409,14 @@ class NullspaceTorqueAction(DifferentialIKAction):
         if env_ids is None:
             env_ids = slice(None)
         self._initial_frame_ready[env_ids] = False
-        self._q_ns[env_ids] = self._posture_target[env_ids]
-        self._next_nullspace_resample_step[env_ids] = 0
+        q_ns = getattr(self._env, "_racquet_nullspace_q_ns", None)
+        if q_ns is not None and q_ns.shape == self._entity.data.joint_pos.shape:
+            self._q_ns[env_ids] = q_ns[env_ids][:, self._joint_ids]
+        else:
+            self._q_ns[env_ids] = self._posture_target[env_ids]
+        self._next_nullspace_resample_step[env_ids] = self._sample_next_nullspace_resample_step(
+            env_ids
+        )
 
     def _maybe_resample_nullspace_target(self) -> None:
         samples = getattr(self._env, "_racquet_nullspace_samples", None)
@@ -399,17 +439,5 @@ class NullspaceTorqueAction(DifferentialIKAction):
         )
         self._q_ns[env_ids] = samples[sample_ids]
 
-        min_s, max_s = self.cfg.nullspace_resample_interval_s
-        min_steps = max(1, int(round(min_s / self._env.step_dt)))
-        max_steps = max(min_steps, int(round(max_s / self._env.step_dt)))
-        if max_steps == min_steps:
-            interval_steps = torch.full_like(env_ids, min_steps)
-        else:
-            interval_steps = torch.randint(
-                min_steps,
-                max_steps + 1,
-                (env_ids.numel(),),
-                device=self.device,
-                dtype=torch.long,
-            )
+        interval_steps = self._sample_next_nullspace_resample_step(env_ids)
         self._next_nullspace_resample_step[env_ids] = current_step[env_ids] + interval_steps
