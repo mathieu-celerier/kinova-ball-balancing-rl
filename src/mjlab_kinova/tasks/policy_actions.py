@@ -16,6 +16,7 @@ from mjlab.envs.mdp.actions.differential_ik import (
 from mjlab.envs.mdp.actions.actions import BaseAction, BaseActionCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
 from mjlab.utils.lab_api.math import apply_delta_pose, compute_pose_error
+from mjlab.utils.lab_api.math import quat_apply_inverse
 from mjlab.utils.lab_api.string import resolve_matching_names_values
 
 
@@ -267,9 +268,12 @@ class InitialFramePositionAction(DifferentialIKAction):
 class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
     """Cartesian action that maps pose commands to task-space torques."""
 
-    damping_task: float = 0.05
+    damping_pos: float = 0.05
+    damping_ori: float = 0.05
     damping_null: float = 0.05
     damping_pinv: float = 0.05
+    bias_compensation: bool = False
+    orientation_error_in_body_frame: bool = False
     nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 
     def __post_init__(self) -> None:
@@ -353,15 +357,6 @@ class NullspaceTorqueAction(DifferentialIKAction):
     def apply_actions(self) -> None:
         robot = self._entity
         frame_pos, frame_quat = self._get_frame_pose()
-        if hasattr(robot.data, "body_link_lin_vel_w"):
-            frame_lin_vel = robot.data.body_link_lin_vel_w[:, self._local_body_id]
-        else:
-            frame_lin_vel = robot.data.body_link_vel_w[:, self._local_body_id, :3]
-        if hasattr(robot.data, "body_link_ang_vel_w"):
-            frame_ang_vel = robot.data.body_link_ang_vel_w[:, self._local_body_id]
-        else:
-            frame_ang_vel = robot.data.body_link_vel_w[:, self._local_body_id, 3:]
-
         pos_error, rot_error = compute_pose_error(
             frame_pos,
             frame_quat,
@@ -374,17 +369,31 @@ class NullspaceTorqueAction(DifferentialIKAction):
         jacp = self._jacp_torch[:, :, self._joint_dof_ids]
         jacr = self._jacr_torch[:, :, self._joint_dof_ids]
         jac = torch.cat((jacp, jacr), dim=1)
+        qd = robot.data.joint_vel[:, self._joint_ids]
+        frame_lin_vel = torch.einsum("bij,bj->bi", jacp, qd)
+        frame_ang_vel = torch.einsum("bij,bj->bi", jacr, qd)
+        rot_jac = jacr
+        if self.cfg.orientation_error_in_body_frame:
+            rot_error = quat_apply_inverse(frame_quat, rot_error)
+            frame_ang_vel = quat_apply_inverse(frame_quat, frame_ang_vel)
+            rot_jac = torch.stack(
+                [
+                    quat_apply_inverse(frame_quat, jacr[:, :, joint_idx])
+                    for joint_idx in range(jacr.shape[-1])
+                ],
+                dim=-1,
+            )
+            jac = torch.cat((jacp, rot_jac), dim=1)
 
         task_wrench = torch.cat(
             (
-                self.cfg.position_weight * pos_error - self.cfg.damping_task * frame_lin_vel,
-                self.cfg.orientation_weight * rot_error - self.cfg.damping_task * frame_ang_vel,
+                self.cfg.position_weight * pos_error - self.cfg.damping_pos * frame_lin_vel,
+                self.cfg.orientation_weight * rot_error - self.cfg.damping_ori * frame_ang_vel,
             ),
             dim=-1,
         )
 
         q = robot.data.joint_pos[:, self._joint_ids]
-        qd = robot.data.joint_vel[:, self._joint_ids]
         null_ref = self.cfg.posture_weight * (self._q_ns - q) - self.cfg.damping_null * qd
 
         jjt = torch.einsum("bij,bkj->bik", jac, jac)
@@ -399,6 +408,8 @@ class NullspaceTorqueAction(DifferentialIKAction):
         tau_task = torch.einsum("bij,bj->bi", jac.transpose(1, 2), task_wrench)
         tau_null = torch.einsum("bij,bj->bi", null_proj, null_ref)
         tau = tau_task + tau_null
+        if self.cfg.bias_compensation:
+            tau = tau + robot.data._joint_dof_field("qfrc_bias")[:, self._joint_ids]
 
         effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
         tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)

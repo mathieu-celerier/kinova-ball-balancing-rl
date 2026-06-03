@@ -65,12 +65,15 @@ class JointActionParameters:
 class CartesianActionParameters:
     delta_pos_scale: float = 0.05
     delta_ori_scale: float = 0.5
-    damping_task: float = 0.05
+    damping_pos: float = 0.05
+    damping_ori: float = 0.05
     damping_null: float = 0.05
     damping_pinv: float = 0.05
     position_weight: float = 1.0
     orientation_weight: float = 1.0
     posture_weight: float = 0.03
+    bias_compensation: bool = False
+    orientation_error_in_body_frame: bool = False
     nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 
 
@@ -253,6 +256,11 @@ def _coerce_value(field_type: Any, value: Any, current_value: Any) -> Any:
 
 
 def _merge_dataclass(instance: T, overrides: dict[str, Any]) -> T:
+    if isinstance(instance, CartesianActionParameters) and "damping_task" in overrides:
+        legacy_damping = overrides.pop("damping_task")
+        overrides.setdefault("damping_pos", legacy_damping)
+        overrides.setdefault("damping_ori", legacy_damping)
+
     values = {}
     valid_fields = {field_info.name: field_info for field_info in fields(instance)}
     type_hints = get_type_hints(type(instance))
