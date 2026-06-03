@@ -1,0 +1,47 @@
+cartesian_manual_ui:
+  action:
+    min: -10.0
+    max: 10.0
+    step: 0.05
+  position_weight:
+    min: 20.0
+    max: 100.0
+    step: 1.0
+  orientation_weight:
+    min: 20.0
+    max: 100.0
+    step: 1.0
+  damping_pos:
+    min: 1.0
+    max: 50.0
+    step: 0.1
+  damping_ori:
+    min: 1.0
+    max: 50.0
+    step: 0.1
+  damping_null:
+    min: 0.0
+    max: 50.0
+    step: 0.1
+  damping_pinv:
+    min: 0.0
+    max: 0.01
+    step: 0.0001
+  posture_weight:
+    min: 0.0
+    max: 200.0
+    step: 1.0
+  position_scale:
+    min: 0.0
+    max: 10.0
+    step: 0.04
+  orientation_scale:
+    min: 0.0
+    max: 10.0
+    step: 0.05
+  p0:
+    span: 1.0
+    step: 0.005
+  nullspace:
+    min: null
+    max: null
