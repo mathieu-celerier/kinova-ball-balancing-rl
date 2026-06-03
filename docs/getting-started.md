@@ -156,6 +156,23 @@ uv run kinova-play-run config/training_sets/joint_randomization_ablation/ball_re
 
 `kinova-play-run` also supports `--ball-kick` before the `--` separator.
 
+To inspect the cartesian control law directly with live sliders for the 6D
+action and the 7D null-space posture target:
+
+```bash
+uv run kinova-cartesian-manual --device cuda:0
+```
+
+Useful flags:
+
+- `--no-terminations` disables automatic episode resets
+- `--log-control-law` shows the controller terms in the UI
+
+The manual viewer reads its slider ranges from
+`config/cartesian_manual_ui.yaml`. Edit that file to change the ranges and
+step sizes for the cartesian gains, including `damping_pos` and `damping_ori`,
+the action sliders, `p0`, and the null-space target sliders.
+
 ## GPU Fallback
 
 If no CUDA device is visible to the training process, the Kinova package now falls back to CPU instead of crashing during GPU selection.

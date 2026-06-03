@@ -131,6 +131,14 @@ with:
 
 Those pose targets are then tracked by the Cartesian torque controller with the null-space posture term described below.
 
+The task-space torque law uses separate linear and angular damping terms:
+
+```text
+F_task = position_weight * e_p - damping_pos * (J_p qdot)
+T_task = orientation_weight * e_R - damping_ori * (J_R qdot)
+tau_task = J^T [F_task, T_task]
+```
+
 The Cartesian null-space posture target uses the same pre-sampled
 racquet-compatible posture list as the optional joint torque mode. It is
 resampled during the episode with
