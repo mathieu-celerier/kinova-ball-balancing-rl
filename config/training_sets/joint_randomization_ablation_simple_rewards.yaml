@@ -1,7 +1,7 @@
 variant: joint
 base_config: ../task_parameters.yaml
 default_stop_policy:
-  min_iterations: 1000
+  min_iterations: 8000
   max_iterations: 20000
   combine: all
   criteria:
@@ -19,9 +19,25 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - joint_randomization_ablation_simple_rewards/all_randomization.yaml
-  - joint_randomization_ablation_simple_rewards/all_randomization_no_joint_pos.yaml
-  - joint_randomization_ablation_simple_rewards/all_except_robot_model.yaml
-  - joint_randomization_ablation_simple_rewards/all_except_null_space_and_robot_model.yaml
-  - joint_randomization_ablation_simple_rewards/no_model_rand.yaml
-  - joint_randomization_ablation_simple_rewards/no_rand.yaml
+  - name: joint_all_randomization
+    variant: joint
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
+    overrides: {}
+  - name: joint_ball_properties_and_racquet_model
+    variant: joint
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_properties_only,
+        racquet_model_only,
+      ]
+    overrides: {}
+  - name: joint_null_space_only
+    variant: joint
+    presets: [zero_ball_reset_velocity, simple_rewards, null_space_only]
+    overrides: {}
+  - name: joint_no_rand
+    variant: joint
+    presets: [zero_ball_reset_velocity, simple_rewards, no_rand]
+    overrides: {}
