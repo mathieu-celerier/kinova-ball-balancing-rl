@@ -35,6 +35,59 @@ def _gain_tensor(
     return values
 
 
+def _dynamically_consistent_nullspace_torque(
+    action: BaseAction,
+    jac: torch.Tensor,
+    joint_dof_ids: torch.Tensor,
+    tau_ref: torch.Tensor,
+    damping_pinv: float,
+) -> torch.Tensor:
+    """Project joint torques with the dynamically consistent torque null-space."""
+    nworld = action.num_envs
+    nv = action._env.sim.mj_model.nv
+    rhs_wp = getattr(action, "_mass_solve_rhs_wp", None)
+    sol_wp = getattr(action, "_mass_solve_sol_wp", None)
+    if rhs_wp is None or sol_wp is None:
+        with wp.ScopedDevice(action._env.sim.wp_device):
+            rhs_wp = wp.zeros((nworld, nv), dtype=float)
+            sol_wp = wp.zeros((nworld, nv), dtype=float)
+        action._mass_solve_rhs_wp = rhs_wp
+        action._mass_solve_sol_wp = sol_wp
+        action._mass_solve_rhs_torch = wp.to_torch(rhs_wp)
+        action._mass_solve_sol_torch = wp.to_torch(sol_wp)
+
+    rhs_torch = action._mass_solve_rhs_torch
+    sol_torch = action._mass_solve_sol_torch
+
+    with wp.ScopedDevice(action._env.sim.wp_device):
+        mjwarp.crb(action._env.sim.wp_model, action._env.sim.wp_data)
+        mjwarp.factor_m(action._env.sim.wp_model, action._env.sim.wp_data)
+
+    task_dim = jac.shape[1]
+    m_inv_jt_cols: list[torch.Tensor] = []
+    for task_idx in range(task_dim):
+        rhs_torch.zero_()
+        rhs_torch[:, joint_dof_ids] = jac[:, task_idx, :]
+        with wp.ScopedDevice(action._env.sim.wp_device):
+            mjwarp.solve_m(
+                action._env.sim.wp_model,
+                action._env.sim.wp_data,
+                sol_wp,
+                rhs_wp,
+            )
+        m_inv_jt_cols.append(sol_torch[:, joint_dof_ids].clone())
+
+    m_inv_jt = torch.stack(m_inv_jt_cols, dim=-1)
+    lambda_inv = torch.matmul(jac, m_inv_jt)
+    eye_task = torch.eye(task_dim, device=jac.device, dtype=jac.dtype).unsqueeze(0)
+    damping = max(damping_pinv, 1e-6)
+    lambda_damped = torch.linalg.inv(lambda_inv + (damping**2) * eye_task)
+    j_bar = torch.matmul(m_inv_jt, lambda_damped)
+
+    task_leak = torch.einsum("bji,bj->bi", j_bar, tau_ref)
+    return tau_ref - torch.einsum("bij,bi->bj", jac, task_leak)
+
+
 @dataclass(kw_only=True)
 class JointNullspaceTorqueActionCfg(BaseActionCfg):
     """Joint action interpreted as a PD torque plus racquet-frame null-space torque."""
@@ -156,17 +209,13 @@ class JointNullspaceTorqueAction(BaseAction):
         jacp = self._jacp_torch[:, :, self._joint_dof_ids]
         jacr = self._jacr_torch[:, :, self._joint_dof_ids]
         jac = torch.cat((jacp, jacr), dim=1)
-        jjt = torch.einsum("bij,bkj->bik", jac, jac)
-        eye_task = torch.eye(jjt.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
-        damping = max(self.cfg.damping_pinv, 1e-6)
-        j_pinv = torch.matmul(
-            jac.transpose(1, 2),
-            torch.linalg.inv(jjt + (damping**2) * eye_task),
+        tau_ns = _dynamically_consistent_nullspace_torque(
+            self,
+            jac,
+            self._joint_dof_ids,
+            tau_ns_ref,
+            self.cfg.damping_pinv,
         )
-        eye_joint = torch.eye(jac.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
-        null_proj = eye_joint - torch.matmul(j_pinv, jac)
-
-        tau_ns = torch.einsum("bij,bj->bi", null_proj, tau_ns_ref)
         tau = tau_rl + tau_ns
 
         effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
@@ -396,17 +445,14 @@ class NullspaceTorqueAction(DifferentialIKAction):
         q = robot.data.joint_pos[:, self._joint_ids]
         null_ref = self.cfg.posture_weight * (self._q_ns - q) - self.cfg.damping_null * qd
 
-        jjt = torch.einsum("bij,bkj->bik", jac, jac)
-        eye_task = torch.eye(jjt.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
-        j_pinv = torch.matmul(
-            jac.transpose(1, 2),
-            torch.linalg.inv(jjt + (self.cfg.damping_pinv**2) * eye_task),
-        )
-        eye_joint = torch.eye(jac.shape[-1], device=self.device, dtype=jac.dtype).unsqueeze(0)
-        null_proj = eye_joint - torch.matmul(j_pinv, jac)
-
         tau_task = torch.einsum("bij,bj->bi", jac.transpose(1, 2), task_wrench)
-        tau_null = torch.einsum("bij,bj->bi", null_proj, null_ref)
+        tau_null = _dynamically_consistent_nullspace_torque(
+            self,
+            jac,
+            self._joint_dof_ids,
+            null_ref,
+            self.cfg.damping_pinv,
+        )
         tau = tau_task + tau_null
         if self.cfg.bias_compensation:
             tau = tau + robot.data._joint_dof_field("qfrc_bias")[:, self._joint_ids]

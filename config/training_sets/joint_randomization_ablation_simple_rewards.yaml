@@ -31,6 +31,7 @@ runs:
         simple_rewards,
         ball_properties_only,
         racquet_model_only,
+        use_nullspace_torque,
       ]
     overrides: {}
   - name: joint_null_space_only

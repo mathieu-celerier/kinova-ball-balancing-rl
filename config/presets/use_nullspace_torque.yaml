@@ -1,0 +1,2 @@
+joint_action:
+  use_nullspace_torque: true
