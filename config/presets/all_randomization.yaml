@@ -4,5 +4,8 @@ training:
   randomize_ball_properties: true
   randomize_pd_gains: true
   randomize_robot_model: true
-  randomize_null_space_init: true
+  randomize_null_space_init: false
   use_ball_kick: true
+
+joint_action:
+  use_nullspace_torque: true
