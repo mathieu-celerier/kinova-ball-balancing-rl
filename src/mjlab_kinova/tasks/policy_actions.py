@@ -407,6 +407,38 @@ class NullspaceTorqueAction(DifferentialIKAction):
         self._next_nullspace_resample_step = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.long
         )
+        self._position_weight = torch.full(
+            (self.num_envs, 1), self.cfg.position_weight, device=self.device
+        )
+        self._orientation_weight = torch.full(
+            (self.num_envs, 1), self.cfg.orientation_weight, device=self.device
+        )
+        self._posture_weight = torch.full(
+            (self.num_envs, 1), self.cfg.posture_weight, device=self.device
+        )
+        self._damping_pos = torch.full(
+            (self.num_envs, 1), self.cfg.damping_pos, device=self.device
+        )
+        self._damping_ori = torch.full(
+            (self.num_envs, 1), self.cfg.damping_ori, device=self.device
+        )
+        self._damping_null = torch.full(
+            (self.num_envs, 1), self.cfg.damping_null, device=self.device
+        )
+
+    def set_pd_gain_scales(
+        self,
+        env_ids: torch.Tensor,
+        kp_scales: torch.Tensor,
+        kd_scales: torch.Tensor,
+    ) -> None:
+        """Scale the OSC task-space and null-space PD gains per environment."""
+        self._position_weight[env_ids] = self.cfg.position_weight * kp_scales[:, 0:1]
+        self._orientation_weight[env_ids] = self.cfg.orientation_weight * kp_scales[:, 0:1]
+        self._posture_weight[env_ids] = self.cfg.posture_weight * kp_scales[:, 1:2]
+        self._damping_pos[env_ids] = self.cfg.damping_pos * kd_scales[:, 0:1]
+        self._damping_ori[env_ids] = self.cfg.damping_ori * kd_scales[:, 0:1]
+        self._damping_null[env_ids] = self.cfg.damping_null * kd_scales[:, 1:2]
 
     def _sample_next_nullspace_resample_step(
         self, env_ids: torch.Tensor | slice | None = None
@@ -486,14 +518,14 @@ class NullspaceTorqueAction(DifferentialIKAction):
 
         task_accel = torch.cat(
             (
-                self.cfg.position_weight * pos_error - self.cfg.damping_pos * frame_lin_vel,
-                self.cfg.orientation_weight * rot_error - self.cfg.damping_ori * frame_ang_vel,
+                self._position_weight * pos_error - self._damping_pos * frame_lin_vel,
+                self._orientation_weight * rot_error - self._damping_ori * frame_ang_vel,
             ),
             dim=-1,
         )
 
         q = robot.data.joint_pos[:, self._joint_ids]
-        null_ref = self.cfg.posture_weight * (self._q_ns - q) - self.cfg.damping_null * qd
+        null_ref = self._posture_weight * (self._q_ns - q) - self._damping_null * qd
 
         tau_task = _operational_space_task_torque(
             self,

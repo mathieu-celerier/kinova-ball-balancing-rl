@@ -2000,6 +2000,42 @@ def randomize_pd_gains(
     biasprm[env_grid, act_grid, 2] = -out_kd
 
 
+def randomize_osc_pd_gains(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | slice | None,
+    kp_range: tuple[float, float],
+    kd_range: tuple[float, float],
+    action_name: str,
+) -> None:
+    """Randomize Cartesian OSC task-space and null-space PD gains."""
+    if isinstance(env_ids, slice):
+        env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)[env_ids]
+    else:
+        env_ids = _as_env_ids(env, env_ids)
+    if env_ids.numel() == 0:
+        return
+
+    action_term = env.action_manager.get_term(action_name)
+    if not hasattr(action_term, "set_pd_gain_scales"):
+        raise TypeError(
+            f"Action term `{action_name}` does not support OSC PD gain randomization"
+        )
+
+    kp_scales = sample_uniform(
+        kp_range[0],
+        kp_range[1],
+        (env_ids.numel(), 2),
+        device=env.device,
+    )
+    kd_scales = sample_uniform(
+        kd_range[0],
+        kd_range[1],
+        (env_ids.numel(), 2),
+        device=env.device,
+    )
+    action_term.set_pd_gain_scales(env_ids, kp_scales, kd_scales)
+
+
 def _randomize_body_mass_like_field(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,

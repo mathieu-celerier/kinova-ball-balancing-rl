@@ -660,16 +660,27 @@ def _events_cfg(
         )
 
     if behavior.randomize_pd_gains:
-        events["randomize_pd_gains"] = EventTermCfg(
-            func=mdp.dr.pd_gains,
-            mode="reset",
-            params={
-                "kp_range": randomization.pd_gain_scale,
-                "kd_range": randomization.pd_gain_scale,
-                "asset_cfg": robot_actuators_cfg(),
-                "operation": "scale",
-            },
-        )
+        if spec.action_kind == "joint":
+            events["randomize_pd_gains"] = EventTermCfg(
+                func=mdp.dr.pd_gains,
+                mode="reset",
+                params={
+                    "kp_range": randomization.pd_gain_scale,
+                    "kd_range": randomization.pd_gain_scale,
+                    "asset_cfg": robot_actuators_cfg(),
+                    "operation": "scale",
+                },
+            )
+        else:
+            events["randomize_pd_gains"] = EventTermCfg(
+                func=bb_mdp.randomize_osc_pd_gains,
+                mode="reset",
+                params={
+                    "kp_range": randomization.pd_gain_scale,
+                    "kd_range": randomization.pd_gain_scale,
+                    "action_name": "ee_pos",
+                },
+            )
 
     if behavior.randomize_racquet_model:
         events["randomize_racquet_model"] = EventTermCfg(
