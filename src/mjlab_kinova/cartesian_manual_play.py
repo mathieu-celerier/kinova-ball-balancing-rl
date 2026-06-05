@@ -45,7 +45,6 @@ class _SliderGroup:
     damping_null: viser.GuiSliderHandle
     damping_pinv: viser.GuiSliderHandle
     posture_weight: viser.GuiSliderHandle
-    bias_compensation: viser.GuiCheckboxHandle
     orientation_error_in_body_frame: viser.GuiCheckboxHandle
     position_scale: viser.GuiSliderHandle
     orientation_scale: viser.GuiSliderHandle
@@ -177,7 +176,6 @@ class ManualCartesianPolicy:
         self._action_term.cfg.damping_null = float(self._sliders.damping_null.value)
         self._action_term.cfg.damping_pinv = float(self._sliders.damping_pinv.value)
         self._action_term.cfg.posture_weight = float(self._sliders.posture_weight.value)
-        self._action_term.cfg.bias_compensation = bool(self._sliders.bias_compensation.value)
         self._action_term.cfg.orientation_error_in_body_frame = bool(
             self._sliders.orientation_error_in_body_frame.value
         )
@@ -361,10 +359,7 @@ class ManualCartesianViewer(ViserPlayViewer):
                 null_proj = eye_joint - torch.matmul(j_pinv, jac)
                 tau_task = torch.einsum("bij,bj->bi", jac.transpose(1, 2), task_wrench)
                 tau_null = torch.einsum("bij,bj->bi", null_proj, null_ref)
-                tau_bias = robot.data._joint_dof_field("qfrc_bias")[:, action_term._joint_ids]
                 tau = tau_task + tau_null
-                if action_term.cfg.bias_compensation:
-                    tau = tau + tau_bias
                 effort_limits = action_term._env.sim.model.actuator_ctrlrange[
                     :, action_term._ctrl_ids, 1
                 ]
@@ -435,7 +430,6 @@ class ManualCartesianViewer(ViserPlayViewer):
                         "damping_null": float(action_term.cfg.damping_null),
                         "damping_pinv": float(action_term.cfg.damping_pinv),
                         "posture_weight": float(action_term.cfg.posture_weight),
-                        "bias_compensation": bool(action_term.cfg.bias_compensation),
                         "orientation_error_in_body_frame": bool(
                             action_term.cfg.orientation_error_in_body_frame
                         ),
@@ -617,7 +611,6 @@ class ManualCartesianViewer(ViserPlayViewer):
             f"<strong>damping_null</strong>: {state['damping_null']:.4f}<br/>"
             f"<strong>damping_pinv</strong>: {state['damping_pinv']:.4f}<br/>"
             f"<strong>posture_weight</strong>: {state['posture_weight']:.4f}<br/>"
-            f"<strong>bias_compensation</strong>: {state['bias_compensation']}<br/>"
             f"<strong>orientation_error_in_body_frame</strong>: "
             f"{state['orientation_error_in_body_frame']}<br/>"
             f"<strong>delta_pos_scale</strong>: {state['delta_pos_scale']:.4f}<br/>"
@@ -750,10 +743,6 @@ class ManualCartesianViewer(ViserPlayViewer):
                     step=posture_weight_range.step,
                     initial_value=posture_weight_range.clamp_initial(float(action_term.cfg.posture_weight)),
                 )
-                bias_compensation = server.gui.add_checkbox(
-                    "bias_compensation",
-                    initial_value=bool(action_term.cfg.bias_compensation),
-                )
                 orientation_error_in_body_frame = server.gui.add_checkbox(
                     "orientation_error_in_body_frame",
                     initial_value=bool(action_term.cfg.orientation_error_in_body_frame),
@@ -863,7 +852,6 @@ class ManualCartesianViewer(ViserPlayViewer):
             damping_null=damping_null,
             damping_pinv=damping_pinv,
             posture_weight=posture_weight,
-            bias_compensation=bias_compensation,
             orientation_error_in_body_frame=orientation_error_in_body_frame,
             position_scale=position_scale,
             orientation_scale=orientation_scale,

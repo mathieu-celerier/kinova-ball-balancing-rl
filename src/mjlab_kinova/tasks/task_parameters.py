@@ -72,7 +72,6 @@ class CartesianActionParameters:
     position_weight: float = 1.0
     orientation_weight: float = 1.0
     posture_weight: float = 0.03
-    bias_compensation: bool = False
     orientation_error_in_body_frame: bool = False
     nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 

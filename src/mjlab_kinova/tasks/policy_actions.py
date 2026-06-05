@@ -88,6 +88,57 @@ def _dynamically_consistent_nullspace_torque(
     return tau_ref - torch.einsum("bij,bi->bj", jac, task_leak)
 
 
+def _operational_space_task_torque(
+    action: BaseAction,
+    jac: torch.Tensor,
+    joint_dof_ids: torch.Tensor,
+    task_accel: torch.Tensor,
+    damping_pinv: float,
+) -> torch.Tensor:
+    """Map desired task acceleration to joint torque with operational inertia."""
+    nworld = action.num_envs
+    nv = action._env.sim.mj_model.nv
+    rhs_wp = getattr(action, "_osc_mass_solve_rhs_wp", None)
+    sol_wp = getattr(action, "_osc_mass_solve_sol_wp", None)
+    if rhs_wp is None or sol_wp is None:
+        with wp.ScopedDevice(action._env.sim.wp_device):
+            rhs_wp = wp.zeros((nworld, nv), dtype=float)
+            sol_wp = wp.zeros((nworld, nv), dtype=float)
+        action._osc_mass_solve_rhs_wp = rhs_wp
+        action._osc_mass_solve_sol_wp = sol_wp
+        action._osc_mass_solve_rhs_torch = wp.to_torch(rhs_wp)
+        action._osc_mass_solve_sol_torch = wp.to_torch(sol_wp)
+
+    rhs_torch = action._osc_mass_solve_rhs_torch
+    sol_torch = action._osc_mass_solve_sol_torch
+
+    with wp.ScopedDevice(action._env.sim.wp_device):
+        mjwarp.crb(action._env.sim.wp_model, action._env.sim.wp_data)
+        mjwarp.factor_m(action._env.sim.wp_model, action._env.sim.wp_data)
+
+    task_dim = jac.shape[1]
+    m_inv_jt_cols: list[torch.Tensor] = []
+    for task_idx in range(task_dim):
+        rhs_torch.zero_()
+        rhs_torch[:, joint_dof_ids] = jac[:, task_idx, :]
+        with wp.ScopedDevice(action._env.sim.wp_device):
+            mjwarp.solve_m(
+                action._env.sim.wp_model,
+                action._env.sim.wp_data,
+                sol_wp,
+                rhs_wp,
+            )
+        m_inv_jt_cols.append(sol_torch[:, joint_dof_ids].clone())
+
+    m_inv_jt = torch.stack(m_inv_jt_cols, dim=-1)
+    lambda_inv = torch.matmul(jac, m_inv_jt)
+    eye_task = torch.eye(task_dim, device=jac.device, dtype=jac.dtype).unsqueeze(0)
+    damping = max(damping_pinv, 1e-6)
+    lambda_task = torch.linalg.inv(lambda_inv + (damping**2) * eye_task)
+    task_wrench = torch.einsum("bij,bj->bi", lambda_task, task_accel)
+    return torch.einsum("bij,bi->bj", jac, task_wrench)
+
+
 @dataclass(kw_only=True)
 class JointNullspaceTorqueActionCfg(BaseActionCfg):
     """Joint action interpreted as a PD torque plus racquet-frame null-space torque."""
@@ -315,13 +366,12 @@ class InitialFramePositionAction(DifferentialIKAction):
 
 @dataclass(kw_only=True)
 class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
-    """Cartesian action that maps pose commands to task-space torques."""
+    """Cartesian action that maps pose commands to OSC joint torques."""
 
     damping_pos: float = 0.05
     damping_ori: float = 0.05
     damping_null: float = 0.05
     damping_pinv: float = 0.05
-    bias_compensation: bool = False
     orientation_error_in_body_frame: bool = False
     nullspace_resample_interval_s: tuple[float, float] = (0.25, 1.0)
 
@@ -334,7 +384,7 @@ class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
 
 
 class NullspaceTorqueAction(DifferentialIKAction):
-    """Cartesian operational-space controller with a null-space posture bias."""
+    """Operational-space impedance controller with a null-space posture bias."""
 
     cfg: NullspaceTorqueActionCfg
 
@@ -434,7 +484,7 @@ class NullspaceTorqueAction(DifferentialIKAction):
             )
             jac = torch.cat((jacp, rot_jac), dim=1)
 
-        task_wrench = torch.cat(
+        task_accel = torch.cat(
             (
                 self.cfg.position_weight * pos_error - self.cfg.damping_pos * frame_lin_vel,
                 self.cfg.orientation_weight * rot_error - self.cfg.damping_ori * frame_ang_vel,
@@ -445,7 +495,13 @@ class NullspaceTorqueAction(DifferentialIKAction):
         q = robot.data.joint_pos[:, self._joint_ids]
         null_ref = self.cfg.posture_weight * (self._q_ns - q) - self.cfg.damping_null * qd
 
-        tau_task = torch.einsum("bij,bj->bi", jac.transpose(1, 2), task_wrench)
+        tau_task = _operational_space_task_torque(
+            self,
+            jac,
+            self._joint_dof_ids,
+            task_accel,
+            self.cfg.damping_pinv,
+        )
         tau_null = _dynamically_consistent_nullspace_torque(
             self,
             jac,
@@ -454,8 +510,6 @@ class NullspaceTorqueAction(DifferentialIKAction):
             self.cfg.damping_pinv,
         )
         tau = tau_task + tau_null
-        if self.cfg.bias_compensation:
-            tau = tau + robot.data._joint_dof_field("qfrc_bias")[:, self._joint_ids]
 
         effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
         tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)

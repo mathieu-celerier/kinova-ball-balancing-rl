@@ -38,7 +38,6 @@ cartesian_action:
   position_weight: 50.0
   orientation_weight: 50.0
   posture_weight: 20.0
-  bias_compensation: false
   orientation_error_in_body_frame: false
   nullspace_resample_interval_s: [0.25, 1.0]
 

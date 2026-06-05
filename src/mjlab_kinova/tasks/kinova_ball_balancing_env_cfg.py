@@ -558,7 +558,6 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
             position_weight=action.position_weight,
             orientation_weight=action.orientation_weight,
             posture_weight=action.posture_weight,
-            bias_compensation=action.bias_compensation,
             orientation_error_in_body_frame=action.orientation_error_in_body_frame,
             posture_target=KINOVA_CFG.init_state.joint_pos,
             nullspace_resample_interval_s=action.nullspace_resample_interval_s,
