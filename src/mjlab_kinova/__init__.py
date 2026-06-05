@@ -93,11 +93,44 @@ def _patch_mjlab_wandb_fallback() -> None:
                 "falling back to TensorBoard logging."
             )
             cfg.agent.logger = "tensorboard"
-        return original_run_train(task_id, cfg, log_dir)
+        upload_videos = getattr(cfg.env, "_kinova_upload_videos_to_wandb", True)
+        previous_upload_setting = os.environ.get("MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB")
+        os.environ["MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB"] = "1" if upload_videos else "0"
+        if not upload_videos:
+            print("[INFO] Training videos will be kept locally and not uploaded to W&B.")
+        try:
+            return original_run_train(task_id, cfg, log_dir)
+        finally:
+            if previous_upload_setting is None:
+                os.environ.pop("MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB", None)
+            else:
+                os.environ["MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB"] = previous_upload_setting
 
     mjlab_train.run_train = _run_train_with_wandb_fallback
     mjlab_train._kinova_wandb_fallback_patched = True
 
 
+def _patch_wandb_video_upload() -> None:
+    try:
+        from rsl_rl.utils.wandb_utils import WandbSummaryWriter
+    except ImportError:
+        return
+
+    if getattr(WandbSummaryWriter, "_kinova_video_upload_patched", False):
+        return
+
+    original_save_video = WandbSummaryWriter.save_video
+
+    def _save_video_if_enabled(self, video, it):
+        enabled = os.environ.get("MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB", "1").lower()
+        if enabled not in {"0", "false", "no", "off"}:
+            return original_save_video(self, video, it)
+        return None
+
+    WandbSummaryWriter.save_video = _save_video_if_enabled
+    WandbSummaryWriter._kinova_video_upload_patched = True
+
+
 _patch_mjlab_gpu_selection()
 _patch_mjlab_wandb_fallback()
+_patch_wandb_video_upload()

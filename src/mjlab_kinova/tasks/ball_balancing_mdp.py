@@ -1485,14 +1485,19 @@ def null_space_reset_curriculum(
     env_ids: torch.Tensor | slice,
     final_position_range: tuple[float, float],
     initial_scale: float,
+    start_steps: int,
     duration_steps: int,
     event_name: str = "reset_robot_joints",
 ) -> dict[str, float]:
     """Expand the uniform null-space reset range linearly over training."""
     del env_ids
+    start_steps = max(int(start_steps), 0)
     duration_steps = max(int(duration_steps), 1)
     initial_scale = min(max(float(initial_scale), 0.0), 1.0)
-    progress = min(max(float(env.common_step_counter) / duration_steps, 0.0), 1.0)
+    progress = min(
+        max(float(env.common_step_counter - start_steps) / duration_steps, 0.0),
+        1.0,
+    )
     scale = initial_scale + (1.0 - initial_scale) * progress
     position_range = (
         float(final_position_range[0]) * scale,

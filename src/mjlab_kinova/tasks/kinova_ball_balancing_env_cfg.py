@@ -323,6 +323,7 @@ def kinova_ball_balancing_env_cfg(
         cfg.episode_length_s = params.simulation.play_episode_length_s
         cfg.observations["actor"].enable_corruption = False
 
+    cfg._kinova_upload_videos_to_wandb = params.training.upload_videos_to_wandb
     return cfg
 
 
@@ -729,6 +730,7 @@ def _curriculum_cfg(
             params={
                 "final_position_range": randomization.null_space_joint_offset,
                 "initial_scale": randomization.null_space_curriculum_initial_scale,
+                "start_steps": randomization.null_space_curriculum_start_steps,
                 "duration_steps": randomization.null_space_curriculum_steps,
             },
         )

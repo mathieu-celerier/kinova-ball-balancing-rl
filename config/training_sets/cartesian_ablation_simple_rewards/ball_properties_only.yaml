@@ -16,6 +16,8 @@ default_stop_policy:
       window: 10
       patience: 10
 global_overrides:
+  training:
+    upload_videos_to_wandb: false
   cartesian_action:
     delta_pos_scale: 0.05
     delta_ori_scale: 0.5

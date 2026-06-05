@@ -16,6 +16,8 @@ default_stop_policy:
       window: 10
       patience: 10
 global_overrides:
+  training:
+    upload_videos_to_wandb: false
   ppo:
     max_iterations: 30000
 runs:

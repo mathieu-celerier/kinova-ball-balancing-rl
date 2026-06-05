@@ -110,7 +110,8 @@ class KickParameters:
 @dataclass(frozen=True)
 class RandomizationParameters:
     null_space_joint_offset: tuple[float, float] = (-1.0, 1.0)
-    null_space_curriculum_initial_scale: float = 0.1
+    null_space_curriculum_initial_scale: float = 0.05
+    null_space_curriculum_start_steps: int = 25_000
     null_space_curriculum_steps: int = 125_000
     ball_mass_scale: tuple[float, float] = (0.7, 1.3)
     ball_friction_scale: tuple[float, float] = (0.8, 1.2)
@@ -201,6 +202,7 @@ class TrainingParameters:
     experiment_name_suffix: str | None = None
     wandb_project: str | None = None
     run_name: str | None = None
+    upload_videos_to_wandb: bool = True
     use_observation_noise: bool | None = None
     use_joint_pos_observation: bool | None = None
     enable_ball_kick_in_play: bool = False
