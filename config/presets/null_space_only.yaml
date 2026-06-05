@@ -4,10 +4,5 @@ training:
   randomize_ball_properties: false
   randomize_pd_gains: false
   randomize_robot_model: false
-  randomize_null_space_init: false
+  randomize_null_space_init: true
   use_ball_kick: false
-
-joint_action:
-  use_nullspace_torque: true
-  nullspace_stiffness: [8.0, 8.0, 8.0, 8.0, 3.0, 3.0, 3.0]
-  nullspace_damping: [3.0, 3.0, 3.0, 3.0, 1.5, 1.5, 1.5]

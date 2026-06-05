@@ -6,7 +6,7 @@ from xml.etree import ElementTree as ET
 
 import mujoco
 
-from mjlab.actuator import BuiltinMotorActuatorCfg, BuiltinPositionActuatorCfg
+from mjlab.actuator import BuiltinMotorActuatorCfg, BuiltinPositionActuatorCfg, IdealPdActuatorCfg
 from mjlab.entity import EntityArticulationInfoCfg, EntityCfg
 
 KINOVA_XML: Path = Path(os.path.dirname(__file__)) / "kinova.xml"
@@ -124,6 +124,24 @@ KINOVA_EFFORT_ARTICULATION = EntityArticulationInfoCfg(
     soft_joint_pos_limit_factor=0.95,
 )
 
+KINOVA_IDEAL_PD_ARTICULATION = EntityArticulationInfoCfg(
+    actuators=(
+        IdealPdActuatorCfg(
+            target_names_expr=("joint_1", "joint_2", "joint_3", "joint_4"),
+            stiffness=40.0,
+            damping=15.0,
+            effort_limit=95.0,
+        ),
+        IdealPdActuatorCfg(
+            target_names_expr=("joint_5", "joint_6", "joint_7"),
+            stiffness=15.0,
+            damping=8.5,
+            effort_limit=45.0,
+        ),
+    ),
+    soft_joint_pos_limit_factor=0.95,
+)
+
 KINOVA_ACTION_SCALE: dict[str, float] = {}
 KINOVA_POSITION_STIFFNESS: dict[str, float] = {}
 KINOVA_POSITION_DAMPING: dict[str, float] = {}
@@ -151,6 +169,12 @@ KINOVA_EFFORT_CFG = EntityCfg(
     spec_fn=get_spec,
     init_state=HOME_FRAME,
     articulation=KINOVA_EFFORT_ARTICULATION,
+)
+
+KINOVA_IDEAL_PD_CFG = EntityCfg(
+    spec_fn=get_spec,
+    init_state=HOME_FRAME,
+    articulation=KINOVA_IDEAL_PD_ARTICULATION,
 )
 
 if __name__ == "__main__":
