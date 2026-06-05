@@ -389,7 +389,6 @@ class ManualCartesianViewer(ViserPlayViewer):
                 power_task_p = torch.einsum("bi,bi->b", qd, tau_task_p)
                 power_task_d = torch.einsum("bi,bi->b", qd, tau_task_d)
                 power_task = torch.einsum("bi,bi->b", qd, tau_task)
-                power_bias = torch.einsum("bi,bi->b", qd, tau_bias)
                 power_tau = torch.einsum("bi,bi->b", qd, tau)
                 power_clipped = torch.einsum("bi,bi->b", qd, tau_clipped)
                 lin_vel_gap = measured_lin_vel - frame_lin_vel
@@ -408,10 +407,8 @@ class ManualCartesianViewer(ViserPlayViewer):
                             "rot_p": rot_p[0].detach().cpu().tolist(),
                             "rot_d": rot_d[0].detach().cpu().tolist(),
                             "tau_task": tau_task[0].detach().cpu().tolist(),
-                            "tau_bias": tau_bias[0].detach().cpu().tolist(),
                             "power_task_d": float(power_task_d[0].detach().cpu().item()),
                             "power_task": float(power_task[0].detach().cpu().item()),
-                            "power_bias": float(power_bias[0].detach().cpu().item()),
                             "power_clipped": float(power_clipped[0].detach().cpu().item()),
                         }
                     )
@@ -456,11 +453,9 @@ class ManualCartesianViewer(ViserPlayViewer):
                         "rot_d": rot_d[0].detach().cpu().tolist(),
                         "tau_task_p": tau_task_p[0].detach().cpu().tolist(),
                         "tau_task_d": tau_task_d[0].detach().cpu().tolist(),
-                        "tau_bias": tau_bias[0].detach().cpu().tolist(),
                         "power_task_p": float(power_task_p[0].detach().cpu().item()),
                         "power_task_d": float(power_task_d[0].detach().cpu().item()),
                         "power_task": float(power_task[0].detach().cpu().item()),
-                        "power_bias": float(power_bias[0].detach().cpu().item()),
                         "power_tau": float(power_tau[0].detach().cpu().item()),
                         "power_clipped": float(power_clipped[0].detach().cpu().item()),
                         "task_wrench": task_wrench[0].detach().cpu().tolist(),
@@ -576,7 +571,6 @@ class ManualCartesianViewer(ViserPlayViewer):
                     f"rot_D=[{_fmt(item['rot_d'])}] "
                     f"P_D={item['power_task_d']:.4f} "
                     f"P_task={item['power_task']:.4f} "
-                    f"P_bias={item['power_bias']:.4f} "
                     f"P_clip={item['power_clipped']:.4f}"
                     "<br/>"
                 )
@@ -636,11 +630,9 @@ class ManualCartesianViewer(ViserPlayViewer):
             f"<strong>rot_D</strong>: [{_fmt(state['rot_d'])}]<br/>"
             f"<strong>tau_task_P</strong>: [{_fmt(state['tau_task_p'])}]<br/>"
             f"<strong>tau_task_D</strong>: [{_fmt(state['tau_task_d'])}]<br/>"
-            f"<strong>tau_bias</strong>: [{_fmt(state['tau_bias'])}]<br/>"
             f"<strong>power_task_P</strong>: {state['power_task_p']:.4f}<br/>"
             f"<strong>power_task_D</strong>: {state['power_task_d']:.4f}<br/>"
             f"<strong>power_task</strong>: {state['power_task']:.4f}<br/>"
-            f"<strong>power_bias</strong>: {state['power_bias']:.4f}<br/>"
             f"<strong>power_tau</strong>: {state['power_tau']:.4f}<br/>"
             f"<strong>power_clipped</strong>: {state['power_clipped']:.4f}<br/>"
             f"<strong>task_wrench</strong>: [{_fmt(state['task_wrench'])}]<br/>"
