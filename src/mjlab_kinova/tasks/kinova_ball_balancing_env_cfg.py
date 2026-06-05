@@ -732,7 +732,7 @@ def _curriculum_cfg(
     play: bool,
     params: TaskParameters,
 ) -> dict[str, CurriculumTermCfg]:
-    if play or spec.action_kind != "joint" or not behavior.randomize_null_space_init:
+    if play or not behavior.randomize_null_space_init:
         return {}
     randomization = params.randomization
     return {
