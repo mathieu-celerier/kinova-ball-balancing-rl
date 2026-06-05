@@ -12,9 +12,9 @@ rewards:
   # Racquet related
   racquet_centering: 50.0
   racquet_centering_std: 0.2
-  racquet_orientation_centering: 10.0
+  racquet_orientation_centering: 50.0
   racquet_lin_vel_l2: -100.0
-  racquet_ang_vel_l2: -20.0
+  racquet_ang_vel_l2: -10.0
 
   # Joint/Action related
   action_rate_l2: 0.0
