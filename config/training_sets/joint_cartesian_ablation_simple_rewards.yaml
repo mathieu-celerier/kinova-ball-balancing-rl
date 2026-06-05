@@ -24,13 +24,13 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - name: cartesian_no_rand
+  - name: cartesian_all_randomization
     variant: cartesian
-    presets: [zero_ball_reset_velocity, simple_rewards, no_rand]
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
     overrides: {}
-  - name: joint_null_space_only
+  - name: joint_all_randomization
     variant: joint
-    presets: [zero_ball_reset_velocity, simple_rewards, null_space_only]
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
     overrides: {}
   - name: cartesian_ball_properties_and_racquet_model
     variant: cartesian
@@ -41,18 +41,6 @@ runs:
         ball_properties_only,
         racquet_model_only,
       ]
-    overrides: {}
-  - name: joint_all_randomization
-    variant: joint
-    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
-    overrides: {}
-  - name: cartesian_all_randomization
-    variant: cartesian
-    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
-    overrides: {}
-  - name: joint_no_rand
-    variant: joint
-    presets: [zero_ball_reset_velocity, simple_rewards, no_rand]
     overrides: {}
   - name: joint_ball_properties_and_racquet_model
     variant: joint

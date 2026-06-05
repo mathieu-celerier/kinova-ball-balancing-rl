@@ -1,5 +1,5 @@
 rewards:
-  is_alive: 1.0
+  is_alive: 10.0
 
   # Ball related
   ball_no_contact: -20.0
@@ -10,10 +10,10 @@ rewards:
   plate_drop_under_ball: -20.0
 
   # Racquet related
-  racquet_centering: 25.0
+  racquet_centering: 50.0
   racquet_centering_std: 0.2
   racquet_orientation_centering: 10.0
-  racquet_lin_vel_l2: -50.0
+  racquet_lin_vel_l2: -100.0
   racquet_ang_vel_l2: -20.0
 
   # Joint/Action related
