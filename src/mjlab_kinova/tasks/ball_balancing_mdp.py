@@ -1480,6 +1480,32 @@ def reset_joints_preserving_racquet_pose(
         _accumulate_profile_stat(env, "pose_reset_ik_count", 1.0)
 
 
+def null_space_reset_curriculum(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | slice,
+    final_position_range: tuple[float, float],
+    initial_scale: float,
+    duration_steps: int,
+    event_name: str = "reset_robot_joints",
+) -> dict[str, float]:
+    """Expand the uniform null-space reset range linearly over training."""
+    del env_ids
+    duration_steps = max(int(duration_steps), 1)
+    initial_scale = min(max(float(initial_scale), 0.0), 1.0)
+    progress = min(max(float(env.common_step_counter) / duration_steps, 0.0), 1.0)
+    scale = initial_scale + (1.0 - initial_scale) * progress
+    position_range = (
+        float(final_position_range[0]) * scale,
+        float(final_position_range[1]) * scale,
+    )
+    env.event_manager.get_term_cfg(event_name).params["position_range"] = position_range
+    return {
+        "scale": scale,
+        "position_min": position_range[0],
+        "position_max": position_range[1],
+    }
+
+
 def body_external_force(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,

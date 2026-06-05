@@ -11,6 +11,7 @@ from mjlab.envs import ManagerBasedRlEnvCfg, mdp
 from mjlab.envs.mdp.actions import JointPositionActionCfg
 from mjlab.entity import EntityCfg
 from mjlab.managers.action_manager import ActionTermCfg
+from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.event_manager import EventTermCfg
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
@@ -292,6 +293,7 @@ def kinova_ball_balancing_env_cfg(
         observations=observations,
         actions=_actions_cfg(spec, params),
         events=_events_cfg(spec, behavior, play, params),
+        curriculum=_curriculum_cfg(spec, behavior, play, params),
         rewards=_rewards_cfg(params),
         terminations=_terminations_cfg(params),
         viewer=ViewerConfig(
@@ -710,6 +712,27 @@ def _events_cfg(
         )
 
     return events
+
+
+def _curriculum_cfg(
+    spec: PolicySpec,
+    behavior: TrainingBehavior,
+    play: bool,
+    params: TaskParameters,
+) -> dict[str, CurriculumTermCfg]:
+    if play or spec.action_kind != "joint" or not behavior.randomize_null_space_init:
+        return {}
+    randomization = params.randomization
+    return {
+        "null_space_reset": CurriculumTermCfg(
+            func=bb_mdp.null_space_reset_curriculum,
+            params={
+                "final_position_range": randomization.null_space_joint_offset,
+                "initial_scale": randomization.null_space_curriculum_initial_scale,
+                "duration_steps": randomization.null_space_curriculum_steps,
+            },
+        )
+    }
 
 
 def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
