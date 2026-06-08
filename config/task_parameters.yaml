@@ -30,10 +30,10 @@ joint_action:
 
 cartesian_action:
   delta_pos_scale: 0.5
-  delta_ori_scale: 0.5
-  damping_pos: 28.3
-  damping_ori: 28.3
-  damping_null: 9.0
+  delta_ori_scale: 1.0
+  damping_pos: 30.0
+  damping_ori: 30.0
+  damping_null: 10.0
   damping_pinv: 0.000001
   position_weight: 200.0
   orientation_weight: 200.0

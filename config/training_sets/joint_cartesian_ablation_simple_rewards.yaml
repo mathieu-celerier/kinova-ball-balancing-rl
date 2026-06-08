@@ -18,9 +18,6 @@ default_stop_policy:
 global_overrides:
   training:
     upload_videos_to_wandb: false
-  cartesian_action:
-    delta_pos_scale: 0.05
-    delta_ori_scale: 0.5
   ppo:
     max_iterations: 30000
 runs:
