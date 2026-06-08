@@ -31,12 +31,12 @@ joint_action:
 cartesian_action:
   delta_pos_scale: 0.5
   delta_ori_scale: 0.5
-  damping_pos: 14.0
-  damping_ori: 14.0
+  damping_pos: 28.3
+  damping_ori: 28.3
   damping_null: 9.0
   damping_pinv: 0.01
-  position_weight: 50.0
-  orientation_weight: 50.0
+  position_weight: 200.0
+  orientation_weight: 200.0
   posture_weight: 20.0
   orientation_error_in_body_frame: false
   nullspace_resample_interval_s: [0.25, 1.0]
