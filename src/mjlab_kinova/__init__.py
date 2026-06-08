@@ -93,9 +93,19 @@ def _patch_mjlab_wandb_fallback() -> None:
                 "falling back to TensorBoard logging."
             )
             cfg.agent.logger = "tensorboard"
-        upload_videos = getattr(cfg.env, "_kinova_upload_videos_to_wandb", True)
         previous_upload_setting = os.environ.get("MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB")
-        os.environ["MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB"] = "1" if upload_videos else "0"
+        if previous_upload_setting is None:
+            upload_videos = getattr(cfg.env, "_kinova_upload_videos_to_wandb", True)
+            os.environ["MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB"] = (
+                "1" if upload_videos else "0"
+            )
+        else:
+            upload_videos = previous_upload_setting.lower() not in {
+                "0",
+                "false",
+                "no",
+                "off",
+            }
         if not upload_videos:
             print("[INFO] Training videos will be kept locally and not uploaded to W&B.")
         try:

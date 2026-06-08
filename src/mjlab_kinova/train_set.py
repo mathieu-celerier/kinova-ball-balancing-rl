@@ -380,6 +380,9 @@ def main() -> int:
         )
         env = os.environ.copy()
         env["MJLAB_KINOVA_TASK_PARAMS"] = temp_config_path
+        env["MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB"] = (
+            "1" if params.training.upload_videos_to_wandb else "0"
+        )
         env["WANDB_PROJECT"] = training_set_name
         env["WANDB_NAME"] = run_name
         env["WANDB_RUN_ID"] = wandb_run_id
@@ -393,6 +396,10 @@ def main() -> int:
             print(f"[kinova-train-set] params={temp_config_path}")
             print(f"[kinova-train-set] wandb_project={training_set_name}")
             print(f"[kinova-train-set] wandb_run_id={wandb_run_id}")
+            print(
+                "[kinova-train-set] upload_videos_to_wandb="
+                f"{params.training.upload_videos_to_wandb}"
+            )
             if stop_policy is not None:
                 print(f"[kinova-train-set] stop_policy={json.dumps(stop_policy, sort_keys=True)}")
             print(f"[kinova-train-set] cmd={' '.join(cmd)}")
