@@ -34,7 +34,7 @@ cartesian_action:
   damping_pos: 28.3
   damping_ori: 28.3
   damping_null: 9.0
-  damping_pinv: 0.01
+  damping_pinv: 0.000001
   position_weight: 200.0
   orientation_weight: 200.0
   posture_weight: 20.0
