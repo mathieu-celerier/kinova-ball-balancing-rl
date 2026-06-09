@@ -88,6 +88,13 @@ def _rotation_matrix_from_axis_angle(axis_angle: torch.Tensor) -> torch.Tensor:
     )
 
 
+def _apply_local_rotation_delta(
+    anchor_rot: torch.Tensor, delta_axis_angle: torch.Tensor
+) -> torch.Tensor:
+    """Apply an axis-angle delta expressed in the anchor rotation's local frame."""
+    return torch.matmul(anchor_rot, _rotation_matrix_from_axis_angle(delta_axis_angle))
+
+
 def _dynamically_consistent_nullspace_torque(
     action: BaseAction,
     jac: torch.Tensor,
@@ -540,10 +547,10 @@ class NullspaceTorqueAction(DifferentialIKAction):
             self._desired_pos[:] = (
                 self._initial_frame_pos + actions[:, :3] * self.cfg.delta_pos_scale
             )
-            delta_rot = _rotation_matrix_from_axis_angle(
-                actions[:, 3:] * self.cfg.delta_ori_scale
+            self._desired_rot[:] = _apply_local_rotation_delta(
+                self._initial_frame_rot,
+                actions[:, 3:] * self.cfg.delta_ori_scale,
             )
-            self._desired_rot[:] = torch.matmul(delta_rot, self._initial_frame_rot)
         else:
             self._desired_pos[:] = actions[:, :3]
             raise ValueError("NullspaceTorqueAction only supports relative 6D actions.")

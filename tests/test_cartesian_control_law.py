@@ -20,6 +20,7 @@ from mjlab.utils.lab_api.math import (
     quat_mul,
 )
 from mjlab_kinova.tasks.policy_actions import (
+    _apply_local_rotation_delta,
     _rotation_matrix_error,
     _rotation_matrix_from_axis_angle,
 )
@@ -88,18 +89,35 @@ class CartesianControlLawConventionTests(unittest.TestCase):
             torch.allclose(rot, matrix_from_quat(expected_quat), atol=1e-5)
         )
 
-    def test_axis_angle_action_and_observation_representations_match(self) -> None:
+    def test_local_axis_angle_action_and_observation_representations_match(self) -> None:
+        anchor_rot = matrix_from_quat(_axis_angle([0.3, -0.4, 0.5], 0.8))
         action_orientation = torch.tensor(
-            [[0.2, -0.1, 0.3], [-0.4, 0.25, 0.1]],
+            [[0.2, -0.1, 0.3]],
             dtype=torch.float32,
         )
 
+        desired_rot = _apply_local_rotation_delta(anchor_rot, action_orientation)
         observed_orientation = _axis_angle_from_rotation_matrix(
-            _rotation_matrix_from_axis_angle(action_orientation)
+            torch.matmul(anchor_rot.transpose(1, 2), desired_rot)
         )
 
         self.assertTrue(
             torch.allclose(observed_orientation, action_orientation, atol=1e-5)
+        )
+
+    def test_local_delta_rotates_about_anchor_local_axis(self) -> None:
+        anchor_rot = matrix_from_quat(_axis_angle([0.0, 0.0, 1.0], torch.pi / 2))
+        local_x_delta = torch.tensor([[0.1, 0.0, 0.0]], dtype=torch.float32)
+
+        desired_rot = _apply_local_rotation_delta(anchor_rot, local_x_delta)
+        world_error = _rotation_matrix_error(anchor_rot, desired_rot)
+
+        self.assertTrue(
+            torch.allclose(
+                world_error,
+                torch.tensor([[0.0, torch.sin(torch.tensor(0.1)), 0.0]]),
+                atol=1e-5,
+            )
         )
 
     def test_pose_error_matches_target_minus_current_convention(self) -> None:

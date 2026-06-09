@@ -323,7 +323,7 @@ def body_orientation_axis_angle_rel_nominal(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
-    """Return world-frame axis-angle orientation relative to the nominal home pose."""
+    """Return nominal-local axis-angle orientation relative to the nominal home pose."""
     if not hasattr(env, "_racquet_nominal_pose_w"):
         env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
             env=env,
@@ -335,8 +335,8 @@ def body_orientation_axis_angle_rel_nominal(
     body_ids = asset.indexing.body_ids[asset_cfg.body_ids]
     current_rot_w = env.sim.data.xmat[:, body_ids].squeeze(1)
     nominal_rot_w = matrix_from_quat(nominal_quat_w)
-    relative_rot_w = torch.matmul(current_rot_w, nominal_rot_w.transpose(1, 2))
-    return _axis_angle_from_rotation_matrix(relative_rot_w)
+    relative_rot_local = torch.matmul(nominal_rot_w.transpose(1, 2), current_rot_w)
+    return _axis_angle_from_rotation_matrix(relative_rot_local)
 
 
 def cartesian_actual_orientation_component(
@@ -344,7 +344,7 @@ def cartesian_actual_orientation_component(
     component: int,
     asset_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
-    """Signed nominal-relative racquet orientation component in world axis-angle coordinates."""
+    """Signed nominal-relative racquet orientation component in nominal-local coordinates."""
     return body_orientation_axis_angle_rel_nominal(env, asset_cfg)[:, component]
 
 
@@ -363,8 +363,10 @@ def cartesian_desired_orientation_component(
         )
     _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
     nominal_rot_w = matrix_from_quat(nominal_quat_w)
-    relative_rot_w = torch.matmul(action._desired_rot, nominal_rot_w.transpose(1, 2))
-    return _axis_angle_from_rotation_matrix(relative_rot_w)[:, component]
+    relative_rot_local = torch.matmul(
+        nominal_rot_w.transpose(1, 2), action._desired_rot
+    )
+    return _axis_angle_from_rotation_matrix(relative_rot_local)[:, component]
 
 
 def cartesian_actual_position_component(
@@ -427,15 +429,26 @@ def cartesian_diagnostic_norm(
     return torch.linalg.vector_norm(getattr(action, field), dim=-1)
 
 
-def cartesian_diagnostic_component(
+def cartesian_orientation_tracking_error_component(
     env: "ManagerBasedRlEnv",
-    field: str,
     component: int,
+    asset_cfg: SceneEntityCfg,
     action_name: str = "ee_pos",
 ) -> torch.Tensor:
-    """Signed component of a diagnostic vector stored by the Cartesian OSC action term."""
+    """Signed OSC orientation error component expressed in nominal-local coordinates."""
     action = env.action_manager.get_term(action_name)
-    return getattr(action, field)[:, component]
+    error = action._diagnostic_rot_error
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=asset_cfg,
+        )
+    _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
+    nominal_rot_w = matrix_from_quat(nominal_quat_w)
+    if action.cfg.orientation_error_in_body_frame:
+        error = torch.einsum("bij,bj->bi", action._get_frame_rotation_matrix(), error)
+    error_local = torch.einsum("bij,bj->bi", nominal_rot_w.transpose(1, 2), error)
+    return error_local[:, component]
 
 
 def cartesian_saturation_fraction(
@@ -460,10 +473,10 @@ def log_cartesian_rollout_diagnostics(
     actual_orientation = body_orientation_axis_angle_rel_nominal(env, asset_cfg)
     _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
     nominal_rot_w = matrix_from_quat(nominal_quat_w)
-    desired_relative_rot_w = torch.matmul(
-        action._desired_rot, nominal_rot_w.transpose(1, 2)
+    desired_relative_rot_local = torch.matmul(
+        nominal_rot_w.transpose(1, 2), action._desired_rot
     )
-    desired_orientation = _axis_angle_from_rotation_matrix(desired_relative_rot_w)
+    desired_orientation = _axis_angle_from_rotation_matrix(desired_relative_rot_local)
     actual_position = body_position_rel_nominal(env, asset_cfg)
     desired_position = action._desired_pos - _nominal_pos_w
 
@@ -493,6 +506,13 @@ def log_cartesian_rollout_diagnostics(
         logs[prefix + name] = torch.mean(value)
 
     tracking_error = action._diagnostic_rot_error
+    if action.cfg.orientation_error_in_body_frame:
+        tracking_error = torch.einsum(
+            "bij,bj->bi", action._get_frame_rotation_matrix(), tracking_error
+        )
+    tracking_error = torch.einsum(
+        "bij,bj->bi", nominal_rot_w.transpose(1, 2), tracking_error
+    )
     for component, axis in enumerate(("x", "y", "z")):
         logs[prefix + f"actual_orientation_{axis}"] = torch.mean(
             actual_orientation[:, component]

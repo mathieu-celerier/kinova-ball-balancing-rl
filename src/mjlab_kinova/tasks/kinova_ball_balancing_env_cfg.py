@@ -924,12 +924,12 @@ def _metrics_cfg(spec: PolicySpec) -> dict[str, MetricsTermCfg]:
             reduce="last",
         )
         metrics[f"orientation_tracking_error_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_diagnostic_component,
-            params={"field": "_diagnostic_rot_error", "component": component},
+            func=bb_mdp.cartesian_orientation_tracking_error_component,
+            params={"component": component, "asset_cfg": racquet_frame_cfg()},
         )
         metrics[f"terminal_orientation_tracking_error_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_diagnostic_component,
-            params={"field": "_diagnostic_rot_error", "component": component},
+            func=bb_mdp.cartesian_orientation_tracking_error_component,
+            params={"component": component, "asset_cfg": racquet_frame_cfg()},
             reduce="last",
         )
         metrics[f"actual_position_{axis}"] = MetricsTermCfg(
