@@ -25,8 +25,8 @@ from mjlab_kinova.tasks.kinova_ball_balancing_env_cfg import (
     kinova_ball_balancing_env_cfg,
 )
 from mjlab_kinova.tasks.policy_actions import (
+    _apply_local_rotation_delta,
     _rotation_matrix_error,
-    _rotation_matrix_from_axis_angle,
 )
 from mjlab_kinova.tasks.task_parameters import load_default_task_parameters
 
@@ -500,10 +500,10 @@ class ManualCartesianViewer(ViserPlayViewer):
                     action_term._initial_frame_pos
                     + preview_actions[:, :3] * action_term.cfg.delta_pos_scale
                 )
-                delta_rot = _rotation_matrix_from_axis_angle(
-                    preview_actions[:, 3:] * action_term.cfg.delta_ori_scale
+                desired_rot = _apply_local_rotation_delta(
+                    action_term._initial_frame_rot,
+                    preview_actions[:, 3:] * action_term.cfg.delta_ori_scale,
                 )
-                desired_rot = torch.matmul(delta_rot, action_term._initial_frame_rot)
             else:
                 raise ValueError("NullspaceTorqueAction only supports relative 6D actions.")
 

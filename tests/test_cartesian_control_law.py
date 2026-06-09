@@ -34,7 +34,7 @@ def _axis_angle(axis: list[float], angle: float) -> torch.Tensor:
 
 
 class CartesianControlLawConventionTests(unittest.TestCase):
-    def test_rotation_matrix_error_matches_small_world_frame_delta(self) -> None:
+    def test_logarithmic_rotation_error_matches_world_frame_delta(self) -> None:
         current_quat = _axis_angle([0.0, 1.0, 0.0], 0.35)
         delta = torch.tensor([[0.05, -0.02, 0.03]], dtype=torch.float32)
         _target_pos, desired_quat = apply_delta_pose(
@@ -48,12 +48,9 @@ class CartesianControlLawConventionTests(unittest.TestCase):
             matrix_from_quat(desired_quat),
         )
 
-        expected = torch.sin(torch.linalg.norm(delta, dim=-1, keepdim=True)) * (
-            delta / torch.linalg.norm(delta, dim=-1, keepdim=True)
-        )
-        self.assertTrue(torch.allclose(rot_error, expected, atol=1e-5))
+        self.assertTrue(torch.allclose(rot_error, delta, atol=1e-5))
 
-    def test_rotation_matrix_error_body_frame_rotates_world_error(self) -> None:
+    def test_logarithmic_rotation_error_body_frame_rotates_world_error(self) -> None:
         current_quat = _axis_angle([0.0, 0.0, 1.0], torch.pi / 2)
         delta = torch.tensor([[0.1, 0.0, 0.0]], dtype=torch.float32)
         _target_pos, desired_quat = apply_delta_pose(
@@ -71,10 +68,26 @@ class CartesianControlLawConventionTests(unittest.TestCase):
         self.assertTrue(
             torch.allclose(
                 body_error,
-                torch.tensor([[0.0, -torch.sin(torch.tensor(0.1)), 0.0]]),
+                torch.tensor([[0.0, -0.1, 0.0]]),
                 atol=1e-5,
             )
         )
+
+    def test_logarithmic_rotation_error_preserves_error_beyond_ninety_degrees(
+        self,
+    ) -> None:
+        current_rot = torch.eye(3, dtype=torch.float32).unsqueeze(0)
+        angle = 2.0
+        desired_rot = _rotation_matrix_from_axis_angle(
+            torch.tensor([[angle, 0.0, 0.0]], dtype=torch.float32)
+        )
+
+        rot_error = _rotation_matrix_error(current_rot, desired_rot)
+
+        self.assertTrue(
+            torch.allclose(rot_error, torch.tensor([[angle, 0.0, 0.0]]), atol=1e-5)
+        )
+        self.assertGreater(torch.linalg.vector_norm(rot_error).item(), torch.pi / 2)
 
     def test_axis_angle_matrix_matches_quaternion_rotation(self) -> None:
         axis_angle = torch.tensor([[0.2, -0.1, 0.3]], dtype=torch.float32)
@@ -115,7 +128,7 @@ class CartesianControlLawConventionTests(unittest.TestCase):
         self.assertTrue(
             torch.allclose(
                 world_error,
-                torch.tensor([[0.0, torch.sin(torch.tensor(0.1)), 0.0]]),
+                torch.tensor([[0.0, 0.1, 0.0]]),
                 atol=1e-5,
             )
         )

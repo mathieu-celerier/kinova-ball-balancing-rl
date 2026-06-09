@@ -15,7 +15,11 @@ from mjlab.envs.mdp.actions.differential_ik import (
 )
 from mjlab.envs.mdp.actions.actions import BaseAction, BaseActionCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
-from mjlab.utils.lab_api.math import apply_delta_pose
+from mjlab.utils.lab_api.math import (
+    apply_delta_pose,
+    axis_angle_from_quat,
+    quat_from_matrix,
+)
 from mjlab.utils.lab_api.string import resolve_matching_names_values
 
 
@@ -40,21 +44,12 @@ def _rotation_matrix_error(
     *,
     body_frame: bool = False,
 ) -> torch.Tensor:
-    """Return the classical SO(3) orientation error in world or body coordinates."""
+    """Return the logarithmic SO(3) orientation error in world or body coordinates."""
     if body_frame:
-        error_matrix = torch.matmul(current_rot.transpose(1, 2), desired_rot)
-        error_matrix -= torch.matmul(desired_rot.transpose(1, 2), current_rot)
+        error_rot = torch.matmul(current_rot.transpose(1, 2), desired_rot)
     else:
-        error_matrix = torch.matmul(desired_rot, current_rot.transpose(1, 2))
-        error_matrix -= torch.matmul(current_rot, desired_rot.transpose(1, 2))
-    return 0.5 * torch.stack(
-        (
-            error_matrix[:, 2, 1],
-            error_matrix[:, 0, 2],
-            error_matrix[:, 1, 0],
-        ),
-        dim=-1,
-    )
+        error_rot = torch.matmul(desired_rot, current_rot.transpose(1, 2))
+    return axis_angle_from_quat(quat_from_matrix(error_rot))
 
 
 def _rotation_matrix_from_axis_angle(axis_angle: torch.Tensor) -> torch.Tensor:
