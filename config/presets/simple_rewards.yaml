@@ -13,6 +13,7 @@ rewards:
   racquet_centering: 50.0
   racquet_centering_std: 0.2
   racquet_orientation_centering: 50.0
+  racquet_orientation_centering_std: 0.4
   racquet_lin_vel_l2: -100.0
   racquet_ang_vel_l2: -10.0
 
