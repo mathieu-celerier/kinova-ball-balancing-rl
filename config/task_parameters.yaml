@@ -14,6 +14,7 @@ observation_noise:
   joint_vel: { min: -0.1, max: 0.1 }
   ee_pos: { min: -0.003, max: 0.003 }
   ee_quat: { min: -0.01, max: 0.01 }
+  ee_ori: { min: -0.01, max: 0.01 }
   ee_vel: { min: -0.05, max: 0.05 }
   ee_ang_vel: { min: -0.1, max: 0.1 }
   ee_ft_wrench: { min: -0.1, max: 0.1 }

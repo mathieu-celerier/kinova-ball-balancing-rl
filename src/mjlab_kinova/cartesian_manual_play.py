@@ -15,16 +15,18 @@ import yaml
 from mjlab.envs import ManagerBasedRlEnv
 from mjlab.rl import RslRlVecEnvWrapper
 from mjlab.utils.lab_api.math import (
-    apply_delta_pose,
-    compute_pose_error,
-    quat_apply_inverse,
     quat_conjugate,
+    quat_from_matrix,
     quat_mul,
 )
 from mjlab.viewer.viser.viewer import ViserPlayViewer
 
 from mjlab_kinova.tasks.kinova_ball_balancing_env_cfg import (
     kinova_ball_balancing_env_cfg,
+)
+from mjlab_kinova.tasks.policy_actions import (
+    _rotation_matrix_error,
+    _rotation_matrix_from_axis_angle,
 )
 from mjlab_kinova.tasks.task_parameters import load_default_task_parameters
 
@@ -159,9 +161,9 @@ class ManualCartesianPolicy:
         # Disable automatic null-space target resampling for this debug mode.
         action_term.cfg.nullspace_resample_interval_s = (1_000_000.0, 1_000_000.0)
         action_term._next_nullspace_resample_step[:] = torch.iinfo(torch.long).max // 4
-        frame_pos, frame_quat = action_term._get_frame_pose()
+        frame_pos, _frame_quat = action_term._get_frame_pose()
         action_term._initial_frame_pos[:] = frame_pos
-        action_term._initial_frame_quat[:] = frame_quat
+        action_term._initial_frame_rot[:] = action_term._get_frame_rotation_matrix()
         action_term._initial_frame_ready[:] = True
 
     def __call__(self, obs: Any) -> torch.Tensor:
@@ -188,8 +190,9 @@ class ManualCartesianPolicy:
             dtype=self._action_term._initial_frame_pos.dtype,
         ).unsqueeze(0)
         if not bool(self._action_term._initial_frame_ready[0].item()):
-            _frame_pos, frame_quat = self._action_term._get_frame_pose()
-            self._action_term._initial_frame_quat[:1] = frame_quat[:1]
+            self._action_term._initial_frame_rot[:1] = (
+                self._action_term._get_frame_rotation_matrix()[:1]
+            )
         self._action_term._initial_frame_pos[:1] = p0
         self._action_term._initial_frame_ready[:1] = True
 
@@ -306,11 +309,11 @@ class ManualCartesianViewer(ViserPlayViewer):
                 else:
                     measured_ang_vel = robot.data.body_link_vel_w[:, action_term._local_body_id, 3:]
 
-                pos_error, rot_error = compute_pose_error(
-                    frame_pos,
-                    frame_quat,
-                    action_term._desired_pos,
-                    action_term._desired_quat,
+                pos_error = action_term._desired_pos - frame_pos
+                rot_error = _rotation_matrix_error(
+                    action_term._get_frame_rotation_matrix(),
+                    action_term._desired_rot,
+                    body_frame=action_term.cfg.orientation_error_in_body_frame,
                 )
 
                 jacp = action_term._jacp_torch[:, :, action_term._joint_dof_ids]
@@ -321,15 +324,13 @@ class ManualCartesianViewer(ViserPlayViewer):
                 frame_ang_vel = torch.einsum("bij,bj->bi", jacr, qd)
                 rot_jac = jacr
                 if action_term.cfg.orientation_error_in_body_frame:
-                    rot_error = quat_apply_inverse(frame_quat, rot_error)
-                    frame_ang_vel = quat_apply_inverse(frame_quat, frame_ang_vel)
-                    rot_jac = torch.stack(
-                        [
-                            quat_apply_inverse(frame_quat, jacr[:, :, joint_idx])
-                            for joint_idx in range(jacr.shape[-1])
-                        ],
-                        dim=-1,
+                    world_to_body = action_term._get_frame_rotation_matrix().transpose(
+                        1, 2
                     )
+                    frame_ang_vel = torch.einsum(
+                        "bij,bj->bi", world_to_body, frame_ang_vel
+                    )
+                    rot_jac = torch.matmul(world_to_body, jacr)
                     jac = torch.cat((jacp, rot_jac), dim=1)
                 task_wrench = torch.cat(
                     (
@@ -492,27 +493,27 @@ class ManualCartesianViewer(ViserPlayViewer):
             frame_ang_vel = robot.data.body_link_vel_w[:, action_term._local_body_id, 3:]
 
         desired_pos = action_term._desired_pos
-        desired_quat = action_term._desired_quat
+        desired_rot = action_term._desired_rot
         if preview_actions is not None:
             if action_term._action_dim == 6:
-                delta = preview_actions.clone()
-                delta[:, :3] *= action_term.cfg.delta_pos_scale
-                delta[:, 3:] *= action_term.cfg.delta_ori_scale
-                desired_pos, desired_quat = apply_delta_pose(
-                    action_term._initial_frame_pos,
-                    action_term._initial_frame_quat,
-                    delta,
+                desired_pos = (
+                    action_term._initial_frame_pos
+                    + preview_actions[:, :3] * action_term.cfg.delta_pos_scale
                 )
+                delta_rot = _rotation_matrix_from_axis_angle(
+                    preview_actions[:, 3:] * action_term.cfg.delta_ori_scale
+                )
+                desired_rot = torch.matmul(delta_rot, action_term._initial_frame_rot)
             else:
-                desired_pos = preview_actions[:, :3]
-                desired_quat = preview_actions[:, 3:7]
+                raise ValueError("NullspaceTorqueAction only supports relative 6D actions.")
 
-        pos_error, rot_error = compute_pose_error(
-            frame_pos,
-            frame_quat,
-            desired_pos,
-            desired_quat,
+        pos_error = desired_pos - frame_pos
+        rot_error = _rotation_matrix_error(
+            action_term._get_frame_rotation_matrix(),
+            desired_rot,
+            body_frame=action_term.cfg.orientation_error_in_body_frame,
         )
+        desired_quat = quat_from_matrix(desired_rot)
         quat_error = quat_mul(
             desired_quat,
             quat_conjugate(frame_quat),

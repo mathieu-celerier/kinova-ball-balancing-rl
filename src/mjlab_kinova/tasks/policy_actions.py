@@ -15,8 +15,7 @@ from mjlab.envs.mdp.actions.differential_ik import (
 )
 from mjlab.envs.mdp.actions.actions import BaseAction, BaseActionCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
-from mjlab.utils.lab_api.math import apply_delta_pose, compute_pose_error
-from mjlab.utils.lab_api.math import quat_apply_inverse
+from mjlab.utils.lab_api.math import apply_delta_pose
 from mjlab.utils.lab_api.string import resolve_matching_names_values
 
 
@@ -33,6 +32,60 @@ def _gain_tensor(
     index_list, _, value_list = resolve_matching_names_values(gain, target_names)
     values[:, index_list] = torch.tensor(value_list, device=device)
     return values
+
+
+def _rotation_matrix_error(
+    current_rot: torch.Tensor,
+    desired_rot: torch.Tensor,
+    *,
+    body_frame: bool = False,
+) -> torch.Tensor:
+    """Return the classical SO(3) orientation error in world or body coordinates."""
+    if body_frame:
+        error_matrix = torch.matmul(current_rot.transpose(1, 2), desired_rot)
+        error_matrix -= torch.matmul(desired_rot.transpose(1, 2), current_rot)
+    else:
+        error_matrix = torch.matmul(desired_rot, current_rot.transpose(1, 2))
+        error_matrix -= torch.matmul(current_rot, desired_rot.transpose(1, 2))
+    return 0.5 * torch.stack(
+        (
+            error_matrix[:, 2, 1],
+            error_matrix[:, 0, 2],
+            error_matrix[:, 1, 0],
+        ),
+        dim=-1,
+    )
+
+
+def _rotation_matrix_from_axis_angle(axis_angle: torch.Tensor) -> torch.Tensor:
+    """Convert batched axis-angle vectors to rotation matrices with Rodrigues' formula."""
+    angle = torch.linalg.vector_norm(axis_angle, dim=-1, keepdim=True)
+    angle_sq = angle * angle
+    small = angle < 1.0e-4
+    sinc = torch.where(
+        small,
+        1.0 - angle_sq / 6.0 + angle_sq * angle_sq / 120.0,
+        torch.sin(angle) / angle.clamp_min(1.0e-8),
+    )
+    one_minus_cos_over_angle_sq = torch.where(
+        small,
+        0.5 - angle_sq / 24.0 + angle_sq * angle_sq / 720.0,
+        (1.0 - torch.cos(angle)) / angle_sq.clamp_min(1.0e-8),
+    )
+    x, y, z = axis_angle.unbind(dim=-1)
+    zeros = torch.zeros_like(x)
+    skew = torch.stack(
+        (zeros, -z, y, z, zeros, -x, -y, x, zeros),
+        dim=-1,
+    ).reshape(-1, 3, 3)
+    identity = torch.eye(3, device=axis_angle.device, dtype=axis_angle.dtype).expand(
+        axis_angle.shape[0], -1, -1
+    )
+    return (
+        identity
+        + sinc.unsqueeze(-1) * skew
+        + one_minus_cos_over_angle_sq.unsqueeze(-1) * torch.matmul(skew, skew)
+    )
 
 
 def _dynamically_consistent_nullspace_torque(
@@ -390,10 +443,13 @@ class NullspaceTorqueAction(DifferentialIKAction):
 
     def __init__(self, cfg: NullspaceTorqueActionCfg, env: ManagerBasedRlEnv):
         super().__init__(cfg=cfg, env=env)
+        del self._desired_quat
         self._ctrl_ids = self._entity.indexing.ctrl_ids[self._joint_ids]
         self._initial_frame_pos = torch.zeros(self.num_envs, 3, device=self.device)
-        self._initial_frame_quat = torch.zeros(self.num_envs, 4, device=self.device)
-        self._initial_frame_quat[:, 0] = 1.0
+        self._initial_frame_rot = torch.eye(3, device=self.device).expand(
+            self.num_envs, -1, -1
+        ).clone()
+        self._desired_rot = self._initial_frame_rot.clone()
         self._initial_frame_ready = torch.zeros(
             self.num_envs, device=self.device, dtype=torch.bool
         )
@@ -463,36 +519,35 @@ class NullspaceTorqueAction(DifferentialIKAction):
     def process_actions(self, actions: torch.Tensor) -> None:
         self._raw_actions[:] = actions
         self._maybe_resample_nullspace_target()
-        frame_pos, frame_quat = self._get_frame_pose()
+        frame_pos, _frame_quat = self._get_frame_pose()
+        frame_rot = self._get_frame_rotation_matrix()
         missing_anchor = ~self._initial_frame_ready
         if torch.any(missing_anchor):
             self._initial_frame_pos[missing_anchor] = frame_pos[missing_anchor]
-            self._initial_frame_quat[missing_anchor] = frame_quat[missing_anchor]
+            self._initial_frame_rot[missing_anchor] = frame_rot[missing_anchor]
             self._initial_frame_ready[missing_anchor] = True
 
         if self._action_dim == 6:
-            delta = actions.clone()
-            delta[:, :3] *= self.cfg.delta_pos_scale
-            delta[:, 3:] *= self.cfg.delta_ori_scale
-            target_pos, target_quat = apply_delta_pose(
-                self._initial_frame_pos,
-                self._initial_frame_quat,
-                delta,
+            self._desired_pos[:] = (
+                self._initial_frame_pos + actions[:, :3] * self.cfg.delta_pos_scale
             )
-            self._desired_pos[:] = target_pos
-            self._desired_quat[:] = target_quat
+            delta_rot = _rotation_matrix_from_axis_angle(
+                actions[:, 3:] * self.cfg.delta_ori_scale
+            )
+            self._desired_rot[:] = torch.matmul(delta_rot, self._initial_frame_rot)
         else:
             self._desired_pos[:] = actions[:, :3]
-            self._desired_quat[:] = actions[:, 3:7]
+            raise ValueError("NullspaceTorqueAction only supports relative 6D actions.")
 
     def apply_actions(self) -> None:
         robot = self._entity
-        frame_pos, frame_quat = self._get_frame_pose()
-        pos_error, rot_error = compute_pose_error(
-            frame_pos,
-            frame_quat,
-            self._desired_pos,
-            self._desired_quat,
+        frame_pos, _frame_quat = self._get_frame_pose()
+        frame_rot = self._get_frame_rotation_matrix()
+        pos_error = self._desired_pos - frame_pos
+        rot_error = _rotation_matrix_error(
+            frame_rot,
+            self._desired_rot,
+            body_frame=self.cfg.orientation_error_in_body_frame,
         )
 
         self._point_torch[:] = frame_pos
@@ -505,15 +560,9 @@ class NullspaceTorqueAction(DifferentialIKAction):
         frame_ang_vel = torch.einsum("bij,bj->bi", jacr, qd)
         rot_jac = jacr
         if self.cfg.orientation_error_in_body_frame:
-            rot_error = quat_apply_inverse(frame_quat, rot_error)
-            frame_ang_vel = quat_apply_inverse(frame_quat, frame_ang_vel)
-            rot_jac = torch.stack(
-                [
-                    quat_apply_inverse(frame_quat, jacr[:, :, joint_idx])
-                    for joint_idx in range(jacr.shape[-1])
-                ],
-                dim=-1,
-            )
+            world_to_body = frame_rot.transpose(1, 2)
+            frame_ang_vel = torch.einsum("bij,bj->bi", world_to_body, frame_ang_vel)
+            rot_jac = torch.matmul(world_to_body, jacr)
             jac = torch.cat((jacp, rot_jac), dim=1)
 
         task_accel = torch.cat(
@@ -547,10 +596,22 @@ class NullspaceTorqueAction(DifferentialIKAction):
         tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)
         robot.set_joint_effort_target(tau, joint_ids=self._joint_ids)
 
+    def _get_frame_rotation_matrix(self) -> torch.Tensor:
+        data = self._env.sim.data
+        if self._frame_type == "body":
+            return data.xmat[:, self._frame_id]
+        if self._frame_type == "site":
+            return data.site_xmat[:, self._frame_id]
+        return data.geom_xmat[:, self._frame_id]
+
     def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
-        super().reset(env_ids=env_ids)
         if env_ids is None:
             env_ids = slice(None)
+        self._raw_actions[env_ids] = 0.0
+        self._desired_pos[env_ids] = 0.0
+        self._desired_rot[env_ids] = torch.eye(
+            3, device=self.device, dtype=self._desired_rot.dtype
+        )
         self._initial_frame_ready[env_ids] = False
         q_ns = getattr(self._env, "_racquet_nullspace_q_ns", None)
         if q_ns is not None and q_ns.shape == self._entity.data.joint_pos.shape:

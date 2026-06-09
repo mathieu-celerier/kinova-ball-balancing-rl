@@ -14,13 +14,19 @@ import warp as wp
 from mjlab.entity import Entity
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
-from mjlab.utils.lab_api.math import compute_pose_error, quat_apply, quat_apply_inverse
-from mjlab.utils.lab_api.math import quat_conjugate, quat_mul
+from mjlab.utils.lab_api.math import axis_angle_from_quat, compute_pose_error
+from mjlab.utils.lab_api.math import matrix_from_quat, quat_apply, quat_apply_inverse
+from mjlab.utils.lab_api.math import quat_conjugate, quat_from_matrix, quat_mul
 from mjlab.utils.lab_api.math import sample_uniform
 from mjlab_kinova.robot.kinova_constants import KINOVA_CFG
 
 if TYPE_CHECKING:
     from mjlab.envs import ManagerBasedRlEnv
+
+
+def _axis_angle_from_rotation_matrix(rot: torch.Tensor) -> torch.Tensor:
+    """Convert rotation matrices to their principal axis-angle vectors."""
+    return axis_angle_from_quat(quat_from_matrix(rot))
 
 
 def _reset_debug_enabled() -> bool:
@@ -291,9 +297,11 @@ def body_orientation_w(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
-    """Return the selected body orientation quaternion in world frame."""
+    """Return body orientation as a quaternion constructed from MuJoCo's rotation matrix."""
     asset: Entity = env.scene[asset_cfg.name]
-    return asset.data.body_link_quat_w[:, asset_cfg.body_ids].squeeze(1)
+    body_ids = asset.indexing.body_ids[asset_cfg.body_ids]
+    body_rot_w = env.sim.data.xmat[:, body_ids].squeeze(1)
+    return quat_from_matrix(body_rot_w)
 
 
 def body_position_rel_nominal(
@@ -311,11 +319,11 @@ def body_position_rel_nominal(
     return body_position_w(env, asset_cfg) - nominal_pos_w
 
 
-def body_orientation_rel_nominal(
+def body_orientation_axis_angle_rel_nominal(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
 ) -> torch.Tensor:
-    """Return selected body orientation relative to its nominal home orientation."""
+    """Return world-frame axis-angle orientation relative to the nominal home pose."""
     if not hasattr(env, "_racquet_nominal_pose_w"):
         env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
             env=env,
@@ -323,12 +331,12 @@ def body_orientation_rel_nominal(
         )
 
     _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
-    quat_w = body_orientation_w(env, asset_cfg)
-    quat_rel = quat_mul(quat_w, quat_conjugate(nominal_quat_w))
-    quat_rel = quat_rel / torch.linalg.norm(quat_rel, dim=-1, keepdim=True).clamp(
-        min=1.0e-8
-    )
-    return torch.where(quat_rel[:, :1] < 0.0, -quat_rel, quat_rel)
+    asset: Entity = env.scene[asset_cfg.name]
+    body_ids = asset.indexing.body_ids[asset_cfg.body_ids]
+    current_rot_w = env.sim.data.xmat[:, body_ids].squeeze(1)
+    nominal_rot_w = matrix_from_quat(nominal_quat_w)
+    relative_rot_w = torch.matmul(current_rot_w, nominal_rot_w.transpose(1, 2))
+    return _axis_angle_from_rotation_matrix(relative_rot_w)
 
 
 def body_linear_velocity_w(
@@ -925,9 +933,7 @@ def _compute_nominal_racquet_pose_w(
     nominal_pos_w = (
         robot.data.body_link_pos_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
     )
-    nominal_quat_w = (
-        robot.data.body_link_quat_w[:, plate_asset_cfg.body_ids].squeeze(1).clone()
-    )
+    nominal_quat_w = body_orientation_w(env, plate_asset_cfg).clone()
 
     robot.write_joint_state_to_sim(current_joint_pos, current_joint_vel)
     env.sim.forward()

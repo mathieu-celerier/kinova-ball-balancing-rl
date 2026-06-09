@@ -44,6 +44,7 @@ class ObservationNoiseParameters:
     joint_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
     ee_pos: NoiseRange = field(default_factory=lambda: NoiseRange(-0.003, 0.003))
     ee_quat: NoiseRange = field(default_factory=lambda: NoiseRange(-0.01, 0.01))
+    ee_ori: NoiseRange = field(default_factory=lambda: NoiseRange(-0.01, 0.01))
     ee_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.05, 0.05))
     ee_ang_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
     ee_ft_wrench: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
