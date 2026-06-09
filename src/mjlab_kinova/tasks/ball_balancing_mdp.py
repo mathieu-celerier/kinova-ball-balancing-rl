@@ -339,6 +339,181 @@ def body_orientation_axis_angle_rel_nominal(
     return _axis_angle_from_rotation_matrix(relative_rot_w)
 
 
+def cartesian_actual_orientation_component(
+    env: "ManagerBasedRlEnv",
+    component: int,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Signed nominal-relative racquet orientation component in world axis-angle coordinates."""
+    return body_orientation_axis_angle_rel_nominal(env, asset_cfg)[:, component]
+
+
+def cartesian_desired_orientation_component(
+    env: "ManagerBasedRlEnv",
+    component: int,
+    asset_cfg: SceneEntityCfg,
+    action_name: str = "ee_pos",
+) -> torch.Tensor:
+    """Signed desired orientation component relative to the nominal racquet pose."""
+    action = env.action_manager.get_term(action_name)
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=asset_cfg,
+        )
+    _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
+    nominal_rot_w = matrix_from_quat(nominal_quat_w)
+    relative_rot_w = torch.matmul(action._desired_rot, nominal_rot_w.transpose(1, 2))
+    return _axis_angle_from_rotation_matrix(relative_rot_w)[:, component]
+
+
+def cartesian_actual_position_component(
+    env: "ManagerBasedRlEnv",
+    component: int,
+    asset_cfg: SceneEntityCfg,
+) -> torch.Tensor:
+    """Signed nominal-relative racquet position component in world coordinates."""
+    return body_position_rel_nominal(env, asset_cfg)[:, component]
+
+
+def cartesian_desired_position_component(
+    env: "ManagerBasedRlEnv",
+    component: int,
+    asset_cfg: SceneEntityCfg,
+    action_name: str = "ee_pos",
+) -> torch.Tensor:
+    """Signed desired position component relative to the nominal racquet position."""
+    action = env.action_manager.get_term(action_name)
+    if not hasattr(env, "_racquet_nominal_pose_w"):
+        env._racquet_nominal_pose_w = _compute_nominal_racquet_pose_w(
+            env=env,
+            plate_asset_cfg=asset_cfg,
+        )
+    nominal_pos_w, _nominal_quat_w = env._racquet_nominal_pose_w
+    return (action._desired_pos - nominal_pos_w)[:, component]
+
+
+def cartesian_orientation_tracking_error(
+    env: "ManagerBasedRlEnv",
+    action_name: str = "ee_pos",
+) -> torch.Tensor:
+    """Geodesic orientation tracking-error magnitude between desired and actual frames."""
+    action = env.action_manager.get_term(action_name)
+    current_rot = action._get_frame_rotation_matrix()
+    error_rot = torch.matmul(action._desired_rot, current_rot.transpose(1, 2))
+    return torch.linalg.vector_norm(_axis_angle_from_rotation_matrix(error_rot), dim=-1)
+
+
+def cartesian_orientation_action_norm(
+    env: "ManagerBasedRlEnv",
+    action_name: str = "ee_pos",
+    scaled: bool = False,
+) -> torch.Tensor:
+    """Magnitude of the raw or scaled orientation action."""
+    action = env.action_manager.get_term(action_name)
+    value = action.raw_action[:, 3:]
+    if scaled:
+        value = value * action.cfg.delta_ori_scale
+    return torch.linalg.vector_norm(value, dim=-1)
+
+
+def cartesian_diagnostic_norm(
+    env: "ManagerBasedRlEnv",
+    field: str,
+    action_name: str = "ee_pos",
+) -> torch.Tensor:
+    """Norm of a diagnostic vector stored by the Cartesian OSC action term."""
+    action = env.action_manager.get_term(action_name)
+    return torch.linalg.vector_norm(getattr(action, field), dim=-1)
+
+
+def cartesian_diagnostic_component(
+    env: "ManagerBasedRlEnv",
+    field: str,
+    component: int,
+    action_name: str = "ee_pos",
+) -> torch.Tensor:
+    """Signed component of a diagnostic vector stored by the Cartesian OSC action term."""
+    action = env.action_manager.get_term(action_name)
+    return getattr(action, field)[:, component]
+
+
+def cartesian_saturation_fraction(
+    env: "ManagerBasedRlEnv",
+    action_name: str = "ee_pos",
+) -> torch.Tensor:
+    """Fraction of controlled joints whose requested torque exceeds actuator limits."""
+    action = env.action_manager.get_term(action_name)
+    return action._diagnostic_saturation_fraction
+
+
+def log_cartesian_rollout_diagnostics(
+    env: "ManagerBasedRlEnv",
+    asset_cfg: SceneEntityCfg,
+    action_name: str = "ee_pos",
+) -> None:
+    """Log current Cartesian population statistics once per policy step."""
+    action = env.action_manager.get_term(action_name)
+    if not hasattr(action, "_desired_rot"):
+        return
+
+    actual_orientation = body_orientation_axis_angle_rel_nominal(env, asset_cfg)
+    _nominal_pos_w, nominal_quat_w = env._racquet_nominal_pose_w
+    nominal_rot_w = matrix_from_quat(nominal_quat_w)
+    desired_relative_rot_w = torch.matmul(
+        action._desired_rot, nominal_rot_w.transpose(1, 2)
+    )
+    desired_orientation = _axis_angle_from_rotation_matrix(desired_relative_rot_w)
+    actual_position = body_position_rel_nominal(env, asset_cfg)
+    desired_position = action._desired_pos - _nominal_pos_w
+
+    logs = env.extras["log"]
+    prefix = "Rollout_Metrics/"
+    for name, value in (
+        ("orientation_tracking_error", cartesian_orientation_tracking_error(env, action_name)),
+        ("orientation_action_norm", cartesian_orientation_action_norm(env, action_name)),
+        (
+            "scaled_orientation_action_norm",
+            cartesian_orientation_action_norm(env, action_name, scaled=True),
+        ),
+        (
+            "angular_velocity_norm",
+            cartesian_diagnostic_norm(env, "_diagnostic_frame_ang_vel", action_name),
+        ),
+        (
+            "task_torque_norm",
+            cartesian_diagnostic_norm(env, "_diagnostic_tau_task", action_name),
+        ),
+        (
+            "nullspace_torque_norm",
+            cartesian_diagnostic_norm(env, "_diagnostic_tau_null", action_name),
+        ),
+        ("torque_saturation_fraction", cartesian_saturation_fraction(env, action_name)),
+    ):
+        logs[prefix + name] = torch.mean(value)
+
+    tracking_error = action._diagnostic_rot_error
+    for component, axis in enumerate(("x", "y", "z")):
+        logs[prefix + f"actual_orientation_{axis}"] = torch.mean(
+            actual_orientation[:, component]
+        )
+        logs[prefix + f"desired_orientation_{axis}"] = torch.mean(
+            desired_orientation[:, component]
+        )
+        logs[prefix + f"scaled_orientation_action_{axis}"] = torch.mean(
+            action.raw_action[:, component + 3] * action.cfg.delta_ori_scale
+        )
+        logs[prefix + f"orientation_tracking_error_{axis}"] = torch.mean(
+            tracking_error[:, component]
+        )
+        logs[prefix + f"actual_position_{axis}"] = torch.mean(
+            actual_position[:, component]
+        )
+        logs[prefix + f"desired_position_{axis}"] = torch.mean(
+            desired_position[:, component]
+        )
+
+
 def body_linear_velocity_w(
     env: "ManagerBasedRlEnv",
     asset_cfg: SceneEntityCfg,
@@ -865,6 +1040,10 @@ def racquet_orientation_centering_reward(
     std: float,
 ) -> torch.Tensor:
     """Reward for keeping the racquet orientation near its nominal home pose."""
+    try:
+        log_cartesian_rollout_diagnostics(env, plate_asset_cfg)
+    except KeyError:
+        pass
     ori_error = racquet_ori_dist_from_initial_l2(
         env=env,
         plate_asset_cfg=plate_asset_cfg,
