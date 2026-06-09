@@ -29,7 +29,7 @@ joint_action:
   nullspace_resample_interval_s: [0.25, 1.0]
 
 cartesian_action:
-  delta_pos_scale: 0.5
+  delta_pos_scale: 0.2
   delta_ori_scale: 1.0
   damping_pos: 25.0
   damping_ori: 25.0
