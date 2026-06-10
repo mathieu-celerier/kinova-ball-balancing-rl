@@ -432,7 +432,6 @@ class NullspaceTorqueActionCfg(DifferentialIKActionCfg):
 
     def __post_init__(self) -> None:
         self.use_relative_mode = True
-        self.orientation_weight = 1.0
 
     def build(self, env: ManagerBasedRlEnv) -> "NullspaceTorqueAction":
         return NullspaceTorqueAction(self, env)
