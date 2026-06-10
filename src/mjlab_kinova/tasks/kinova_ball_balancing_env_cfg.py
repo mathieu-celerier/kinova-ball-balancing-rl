@@ -94,6 +94,7 @@ class PolicySpec:
 
 @dataclass(frozen=True)
 class TrainingBehavior:
+    use_ball: bool
     use_observation_noise: bool
     use_joint_pos_observation: bool
     randomize_ball_reset: bool
@@ -140,6 +141,7 @@ POLICY_SPECS: dict[PolicyVariant, PolicySpec] = {
 
 DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
     "joint": TrainingBehavior(
+        use_ball=True,
         use_observation_noise=True,
         use_joint_pos_observation=True,
         randomize_ball_reset=True,
@@ -151,6 +153,7 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
         use_ball_kick=True,
     ),
     "cartesian": TrainingBehavior(
+        use_ball=True,
         use_observation_noise=True,
         use_joint_pos_observation=False,
         randomize_ball_reset=True,
@@ -170,6 +173,7 @@ def _resolve_training_behavior(
     defaults = DEFAULT_TRAINING_BEHAVIOR[variant]
     training = params.training
     return TrainingBehavior(
+        use_ball=training.use_ball,
         use_observation_noise=(
             defaults.use_observation_noise
             if training.use_observation_noise is None
@@ -277,7 +281,7 @@ def kinova_ball_balancing_env_cfg(
             enable_corruption=not play,
         ),
         "critic": ObservationGroupCfg(
-            terms=_critic_observation_terms(params),
+            terms=_critic_observation_terms(behavior, params),
             concatenate_terms=True,
             enable_corruption=False,
         ),
@@ -288,7 +292,7 @@ def kinova_ball_balancing_env_cfg(
             terrain=TerrainEntityCfg(terrain_type="plane"),
             entities={
                 "robot": _robot_cfg_for_variant(variant, params),
-                "ball": _ball_entity_cfg(params),
+                **({"ball": _ball_entity_cfg(params)} if behavior.use_ball else {}),
             },
             num_envs=params.simulation.num_envs,
             env_spacing=params.simulation.env_spacing,
@@ -297,8 +301,8 @@ def kinova_ball_balancing_env_cfg(
         actions=_actions_cfg(spec, params),
         events=_events_cfg(spec, behavior, play, params),
         curriculum=_curriculum_cfg(spec, behavior, play, params),
-        rewards=_rewards_cfg(params),
-        terminations=_terminations_cfg(params),
+        rewards=_rewards_cfg(behavior, params),
+        terminations=_terminations_cfg(behavior, params),
         metrics=_metrics_cfg(spec),
         viewer=ViewerConfig(
             origin_type=ViewerConfig.OriginType.ASSET_BODY,
@@ -401,7 +405,9 @@ def _actor_observation_terms(
     )
 
 
-def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTermCfg]:
+def _critic_observation_terms(
+    behavior: TrainingBehavior, params: TaskParameters
+) -> dict[str, ObservationTermCfg]:
     terms = _shared_observation_terms(use_noise=False, params=params)
     terms.pop("ee_pos_rel")
     terms.pop("ee_ori")
@@ -420,25 +426,30 @@ def _critic_observation_terms(params: TaskParameters) -> dict[str, ObservationTe
                 func=bb_mdp.joint_accelerations,
                 params={"asset_cfg": robot_joints_cfg()},
             ),
-            "ball_pos_plate": ObservationTermCfg(
-                func=bb_mdp.ball_pos_in_plate_frame,
-                params={
-                    "ball_name": "ball",
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                },
-            ),
-            "ball_vel_plate": ObservationTermCfg(
-                func=bb_mdp.ball_lin_vel_in_plate_frame,
-                params={
-                    "ball_name": "ball",
-                    "plate_asset_cfg": racquet_frame_cfg(),
-                },
-            ),
-            "ball_contact_state": ObservationTermCfg(
-                func=bb_mdp.ball_contact_state_mujoco,
-            ),
         }
     )
+    if behavior.use_ball:
+        terms.update(
+            {
+                "ball_pos_plate": ObservationTermCfg(
+                    func=bb_mdp.ball_pos_in_plate_frame,
+                    params={
+                        "ball_name": "ball",
+                        "plate_asset_cfg": racquet_frame_cfg(),
+                    },
+                ),
+                "ball_vel_plate": ObservationTermCfg(
+                    func=bb_mdp.ball_lin_vel_in_plate_frame,
+                    params={
+                        "ball_name": "ball",
+                        "plate_asset_cfg": racquet_frame_cfg(),
+                    },
+                ),
+                "ball_contact_state": ObservationTermCfg(
+                    func=bb_mdp.ball_contact_state_mujoco,
+                ),
+            }
+        )
     return _with_observation_history(
         terms, history_length=params.observation_history_length
     )
@@ -631,13 +642,17 @@ def _events_cfg(
             mode="step",
         ),
     }
+    if not behavior.use_ball:
+        events.pop("reset_ball")
+        events.pop("update_ball_release")
+        events.pop("log_first_step_after_reset")
 
     events["reset_joint_torque_rate_state"] = EventTermCfg(
         func=bb_mdp.reset_joint_torque_rate_state,
         mode="reset",
     )
 
-    if behavior.randomize_ball_properties:
+    if behavior.use_ball and behavior.randomize_ball_properties:
         events["randomize_ball_mass"] = EventTermCfg(
             func=bb_mdp.randomize_body_mass,
             mode="reset",
@@ -704,7 +719,7 @@ def _events_cfg(
             },
         )
 
-    if behavior.use_ball_kick and (
+    if behavior.use_ball and behavior.use_ball_kick and (
         not play or params.training.enable_ball_kick_in_play
     ):
         kick = params.ball_kick
@@ -747,9 +762,11 @@ def _curriculum_cfg(
     }
 
 
-def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
+def _rewards_cfg(
+    behavior: TrainingBehavior, params: TaskParameters
+) -> dict[str, RewardTermCfg]:
     rewards = params.rewards
-    return {
+    terms = {
         "is_alive": RewardTermCfg(func=mdp.is_alive, weight=rewards.is_alive),
         # Keep the main task-relevant terms first so replay viewers surface them first.
         "ball_centering": RewardTermCfg(
@@ -858,6 +875,16 @@ def _rewards_cfg(params: TaskParameters) -> dict[str, RewardTermCfg]:
             params={"asset_cfg": SceneEntityCfg("robot", joint_names=("joint_[246]",))},
         ),
     }
+    if not behavior.use_ball:
+        for name in (
+            "ball_centering",
+            "ball_lin_vel_l2",
+            "ball_lin_vel_plate_l2",
+            "ball_no_contact_penalty",
+            "plate_drop_under_ball",
+        ):
+            terms.pop(name)
+    return terms
 
 
 def _metrics_cfg(spec: PolicySpec) -> dict[str, MetricsTermCfg]:
@@ -943,9 +970,11 @@ def _metrics_cfg(spec: PolicySpec) -> dict[str, MetricsTermCfg]:
     return metrics
 
 
-def _terminations_cfg(params: TaskParameters) -> dict[str, TerminationTermCfg]:
+def _terminations_cfg(
+    behavior: TrainingBehavior, params: TaskParameters
+) -> dict[str, TerminationTermCfg]:
     terminations = params.terminations
-    return {
+    terms = {
         "time_out": TerminationTermCfg(func=mdp.time_out, time_out=True),
         "ball_fell_off": TerminationTermCfg(
             func=bb_mdp.ball_fell_off,
@@ -958,3 +987,6 @@ def _terminations_cfg(params: TaskParameters) -> dict[str, TerminationTermCfg]:
             },
         ),
     }
+    if not behavior.use_ball:
+        terms.pop("ball_fell_off")
+    return terms

@@ -146,6 +146,7 @@ training:
   wandb_project: null
   run_name: null
   upload_videos_to_wandb: true
+  use_ball: true
   use_observation_noise: null
   use_joint_pos_observation: null
   enable_ball_kick_in_play: false

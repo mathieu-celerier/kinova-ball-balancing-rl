@@ -1,0 +1,11 @@
+variant: cartesian
+base_config: ../task_parameters.yaml
+global_overrides:
+  training:
+    upload_videos_to_wandb: false
+  ppo:
+    max_iterations: 5000
+runs:
+  - name: cartesian_pose_only
+    presets: [cartesian_pose_only]
+    overrides: {}

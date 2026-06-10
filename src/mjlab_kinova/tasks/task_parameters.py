@@ -204,6 +204,7 @@ class TrainingParameters:
     wandb_project: str | None = None
     run_name: str | None = None
     upload_videos_to_wandb: bool = True
+    use_ball: bool = True
     use_observation_noise: bool | None = None
     use_joint_pos_observation: bool | None = None
     enable_ball_kick_in_play: bool = False

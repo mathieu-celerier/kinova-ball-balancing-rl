@@ -1,0 +1,26 @@
+training:
+  use_ball: false
+  use_observation_noise: false
+  randomize_ball_reset: false
+  randomize_ball_properties: false
+  randomize_pd_gains: false
+  randomize_racquet_model: false
+  randomize_robot_model: false
+  randomize_null_space_init: false
+  use_ball_kick: false
+
+rewards:
+  is_alive: 1.0
+  racquet_centering: 100.0
+  racquet_centering_std: 0.1
+  racquet_orientation_centering: 100.0
+  racquet_orientation_centering_std: 0.2
+  racquet_lin_vel_l2: -10.0
+  racquet_ang_vel_l2: -10.0
+  action_rate_l2: -0.1
+  action_acc_l2: 0.0
+  joint_vel_l2: 0.0
+  joint_acc_l2: 0.0
+  joint_torque_l2: 0.0
+  joint_torque_rate_l2: 0.0
+  joint_pos_limits: 0.0
