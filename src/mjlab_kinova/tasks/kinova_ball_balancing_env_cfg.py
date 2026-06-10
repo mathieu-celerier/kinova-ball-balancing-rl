@@ -13,7 +13,6 @@ from mjlab.entity import EntityCfg
 from mjlab.managers.action_manager import ActionTermCfg
 from mjlab.managers.curriculum_manager import CurriculumTermCfg
 from mjlab.managers.event_manager import EventTermCfg
-from mjlab.managers.metrics_manager import MetricsTermCfg
 from mjlab.managers.observation_manager import ObservationGroupCfg, ObservationTermCfg
 from mjlab.managers.reward_manager import RewardTermCfg
 from mjlab.managers.scene_entity_config import SceneEntityCfg
@@ -303,7 +302,6 @@ def kinova_ball_balancing_env_cfg(
         curriculum=_curriculum_cfg(spec, behavior, play, params),
         rewards=_rewards_cfg(behavior, params),
         terminations=_terminations_cfg(behavior, params),
-        metrics=_metrics_cfg(spec),
         viewer=ViewerConfig(
             origin_type=ViewerConfig.OriginType.ASSET_BODY,
             entity_name="robot",
@@ -885,89 +883,6 @@ def _rewards_cfg(
         ):
             terms.pop(name)
     return terms
-
-
-def _metrics_cfg(spec: PolicySpec) -> dict[str, MetricsTermCfg]:
-    if spec.variant != "cartesian":
-        return {}
-
-    metrics: dict[str, MetricsTermCfg] = {
-        "orientation_tracking_error": MetricsTermCfg(
-            func=bb_mdp.cartesian_orientation_tracking_error,
-        ),
-        "terminal_orientation_tracking_error": MetricsTermCfg(
-            func=bb_mdp.cartesian_orientation_tracking_error,
-            reduce="last",
-        ),
-        "orientation_action_norm": MetricsTermCfg(
-            func=bb_mdp.cartesian_orientation_action_norm,
-        ),
-        "scaled_orientation_action_norm": MetricsTermCfg(
-            func=bb_mdp.cartesian_orientation_action_norm,
-            params={"scaled": True},
-        ),
-        "angular_velocity_norm": MetricsTermCfg(
-            func=bb_mdp.cartesian_diagnostic_norm,
-            params={"field": "_diagnostic_frame_ang_vel"},
-        ),
-        "terminal_angular_velocity_norm": MetricsTermCfg(
-            func=bb_mdp.cartesian_diagnostic_norm,
-            params={"field": "_diagnostic_frame_ang_vel"},
-            reduce="last",
-        ),
-        "task_torque_norm": MetricsTermCfg(
-            func=bb_mdp.cartesian_diagnostic_norm,
-            params={"field": "_diagnostic_tau_task"},
-        ),
-        "nullspace_torque_norm": MetricsTermCfg(
-            func=bb_mdp.cartesian_diagnostic_norm,
-            params={"field": "_diagnostic_tau_null"},
-        ),
-        "torque_saturation_fraction": MetricsTermCfg(
-            func=bb_mdp.cartesian_saturation_fraction,
-        ),
-        "terminal_torque_saturation_fraction": MetricsTermCfg(
-            func=bb_mdp.cartesian_saturation_fraction,
-            reduce="last",
-        ),
-    }
-    for component, axis in enumerate(("x", "y", "z")):
-        metrics[f"actual_orientation_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_actual_orientation_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-        )
-        metrics[f"desired_orientation_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_desired_orientation_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-        )
-        metrics[f"terminal_actual_orientation_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_actual_orientation_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-            reduce="last",
-        )
-        metrics[f"terminal_desired_orientation_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_desired_orientation_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-            reduce="last",
-        )
-        metrics[f"orientation_tracking_error_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_orientation_tracking_error_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-        )
-        metrics[f"terminal_orientation_tracking_error_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_orientation_tracking_error_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-            reduce="last",
-        )
-        metrics[f"actual_position_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_actual_position_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-        )
-        metrics[f"desired_position_{axis}"] = MetricsTermCfg(
-            func=bb_mdp.cartesian_desired_position_component,
-            params={"component": component, "asset_cfg": racquet_frame_cfg()},
-        )
-    return metrics
 
 
 def _terminations_cfg(

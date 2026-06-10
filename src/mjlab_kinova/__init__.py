@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from pathlib import Path
 from typing import Literal
 
 
@@ -52,47 +51,18 @@ def _patch_mjlab_gpu_selection() -> None:
     mjlab_train.select_gpus = _safe_select_gpus
 
 
-def _wandb_is_configured() -> bool:
-    """Return whether this shell has enough local W&B setup to use the wandb logger."""
-    try:
-        import wandb  # noqa: F401
-    except ImportError:
-        return False
-
-    if os.environ.get("WANDB_API_KEY"):
-        return True
-
-    netrc_path = os.environ.get("NETRC")
-    path = Path(netrc_path).expanduser() if netrc_path else Path.home() / ".netrc"
-    if not path.is_file():
-        return False
-
-    try:
-        contents = path.read_text(encoding="utf-8")
-    except OSError:
-        return False
-
-    return "machine api.wandb.ai" in contents or "machine wandb.ai" in contents
-
-
-def _patch_mjlab_wandb_fallback() -> None:
+def _patch_mjlab_video_upload_setting() -> None:
     try:
         import mjlab.scripts.train as mjlab_train
     except ImportError:
         return
 
-    if getattr(mjlab_train, "_kinova_wandb_fallback_patched", False):
+    if getattr(mjlab_train, "_kinova_video_upload_setting_patched", False):
         return
 
     original_run_train = mjlab_train.run_train
 
-    def _run_train_with_wandb_fallback(task_id, cfg, log_dir):
-        if getattr(cfg.agent, "logger", None) == "wandb" and not _wandb_is_configured():
-            print(
-                "[INFO] W&B is not configured in this shell; "
-                "falling back to TensorBoard logging."
-            )
-            cfg.agent.logger = "tensorboard"
+    def _run_train_with_video_upload_setting(task_id, cfg, log_dir):
         previous_upload_setting = os.environ.get("MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB")
         if previous_upload_setting is None:
             upload_videos = getattr(cfg.env, "_kinova_upload_videos_to_wandb", True)
@@ -116,8 +86,8 @@ def _patch_mjlab_wandb_fallback() -> None:
             else:
                 os.environ["MJLAB_KINOVA_UPLOAD_VIDEOS_TO_WANDB"] = previous_upload_setting
 
-    mjlab_train.run_train = _run_train_with_wandb_fallback
-    mjlab_train._kinova_wandb_fallback_patched = True
+    mjlab_train.run_train = _run_train_with_video_upload_setting
+    mjlab_train._kinova_video_upload_setting_patched = True
 
 
 def _patch_wandb_video_upload() -> None:
@@ -142,5 +112,5 @@ def _patch_wandb_video_upload() -> None:
 
 
 _patch_mjlab_gpu_selection()
-_patch_mjlab_wandb_fallback()
+_patch_mjlab_video_upload_setting()
 _patch_wandb_video_upload()

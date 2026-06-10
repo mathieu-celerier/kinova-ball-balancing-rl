@@ -40,6 +40,7 @@ class CartesianPoseOnlyConfigTests(unittest.TestCase):
         cfg = kinova_ball_balancing_env_cfg(variant="cartesian", params=params)
 
         self.assertNotIn("ball", cfg.scene.entities)
+        self.assertEqual(cfg.metrics, {})
         self.assertEqual(set(cfg.terminations), {"time_out"})
         for terms in (
             cfg.events,

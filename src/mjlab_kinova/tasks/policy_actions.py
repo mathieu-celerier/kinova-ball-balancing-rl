@@ -483,15 +483,6 @@ class NullspaceTorqueAction(DifferentialIKAction):
         self._damping_null = torch.full(
             (self.num_envs, 1), self.cfg.damping_null, device=self.device
         )
-        self._diagnostic_rot_error = torch.zeros(self.num_envs, 3, device=self.device)
-        self._diagnostic_frame_ang_vel = torch.zeros(self.num_envs, 3, device=self.device)
-        self._diagnostic_tau_task = torch.zeros(
-            self.num_envs, self._num_joints, device=self.device
-        )
-        self._diagnostic_tau_null = torch.zeros_like(self._diagnostic_tau_task)
-        self._diagnostic_saturation_fraction = torch.zeros(
-            self.num_envs, device=self.device
-        )
 
     def set_pd_gain_scales(
         self,
@@ -604,14 +595,6 @@ class NullspaceTorqueAction(DifferentialIKAction):
         tau = tau_task + tau_null
 
         effort_limits = self._env.sim.model.actuator_ctrlrange[:, self._ctrl_ids, 1]
-        self._diagnostic_rot_error[:] = rot_error
-        self._diagnostic_frame_ang_vel[:] = frame_ang_vel
-        self._diagnostic_tau_task[:] = tau_task
-        self._diagnostic_tau_null[:] = tau_null
-        self._diagnostic_saturation_fraction[:] = torch.mean(
-            (torch.abs(tau) > effort_limits).to(tau.dtype),
-            dim=-1,
-        )
         tau = torch.clamp(tau, min=-effort_limits, max=effort_limits)
         robot.set_joint_effort_target(tau, joint_ids=self._joint_ids)
 

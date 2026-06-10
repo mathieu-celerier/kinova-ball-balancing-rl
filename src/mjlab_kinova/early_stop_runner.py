@@ -325,17 +325,6 @@ class KinovaOnPolicyRunner(MjlabOnPolicyRunner):
                 rnd_weight=rnd_weight,
             )
 
-            print(
-                "[DEBUG early-stop metrics]",
-                {
-                    k: metrics.get(k)
-                    for k in [
-                        "Train/mean_episode_length",
-                        "Episode_Termination/ball_fell_off",
-                    ]
-                },
-                flush=True,
-            )
             if should_stop:
                 print(f"[INFO]: {stop_reason}", flush=True)
                 stopped_early = True
