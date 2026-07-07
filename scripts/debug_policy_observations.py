@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 from dataclasses import asdict
 from pathlib import Path
 from typing import Any
@@ -25,15 +26,15 @@ from mjlab_kinova.train_set import (
     _load_training_set,
     _normalize_run,
     _resolve_run_cfg,
+    _resolve_run_variant,
 )
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Debug actor observations for a Kinova policy checkpoint by printing "
-            "the raw actor vector, the normalized actor vector, the per-term split, "
-            "and the policy action."
+            "Export the minimal observation/action contract needed to validate "
+            "a Kinova policy implementation on a real robot."
         )
     )
     parser.add_argument(
@@ -94,7 +95,7 @@ def _resolve_run_params(training_set_path: Path, run_name: str):
     training_set_cfg = _load_training_set(training_set_path)
     base_params = _base_parameters(training_set_cfg, training_set_path=training_set_path)
 
-    matched: tuple[list[str], dict[str, Any]] | None = None
+    matched: tuple[str, list[str], dict[str, Any]] | None = None
     for index, raw_run_cfg in enumerate(training_set_cfg["runs"]):
         raw_run_cfg = _resolve_run_cfg(
             raw_run_cfg,
@@ -103,13 +104,18 @@ def _resolve_run_params(training_set_path: Path, run_name: str):
         )
         candidate_name, preset_refs, overrides = _normalize_run(raw_run_cfg, index=index)
         if candidate_name == run_name:
-            matched = (preset_refs, overrides)
+            variant = _resolve_run_variant(
+                training_set_cfg,
+                raw_run_cfg,
+                run_name=candidate_name,
+            )
+            matched = (variant, preset_refs, overrides)
             break
 
     if matched is None:
         raise ValueError(f"Run `{run_name}` was not found in {training_set_path}")
 
-    preset_refs, overrides = matched
+    variant, preset_refs, overrides = matched
     params = _build_run_parameters(
         run_name=run_name,
         preset_refs=preset_refs,
@@ -117,7 +123,7 @@ def _resolve_run_params(training_set_path: Path, run_name: str):
         training_set_path=training_set_path,
         base_params=base_params,
     )
-    return training_set_cfg, params
+    return variant, params
 
 
 def _actor_term_debug_payload(env: ManagerBasedRlEnv) -> list[dict[str, Any]]:
@@ -128,80 +134,179 @@ def _actor_term_debug_payload(env: ManagerBasedRlEnv) -> list[dict[str, Any]]:
     obs_entries = dict(manager.get_active_iterable_terms(0))
 
     payload: list[dict[str, Any]] = []
+    offset = 0
     for name, dims, cfg in zip(actor_terms, actor_dims, actor_cfgs, strict=False):
         key = f"actor-{name}"
         flat = torch.tensor(obs_entries[key], dtype=torch.float32)
+        size = int(math.prod(dims))
         entry: dict[str, Any] = {
             "name": name,
             "flat_shape": list(dims),
+            "offset_start": offset,
+            "offset_end": offset + size,
             "flat": flat.tolist(),
         }
         if cfg.history_length > 0 and cfg.flatten_history_dim:
             per_timestep_dim = int(flat.numel() // cfg.history_length)
+            history = flat.view(cfg.history_length, per_timestep_dim)
             entry["history_length"] = int(cfg.history_length)
-            entry["history"] = (
-                flat.view(cfg.history_length, per_timestep_dim).tolist()
-            )
+            entry["history_order"] = "oldest_to_newest"
+            entry["history"] = history.tolist()
+            entry["current"] = history[-1].tolist()
+        else:
+            entry["current"] = flat.tolist()
         payload.append(entry)
+        offset += size
     return payload
 
 
+def _actor_layout(term_payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [
+        {
+            key: entry[key]
+            for key in (
+                "name",
+                "flat_shape",
+                "offset_start",
+                "offset_end",
+                "history_length",
+                "history_order",
+            )
+            if key in entry
+        }
+        for entry in term_payload
+    ]
 
-def _ee_ft_debug_payload(env: ManagerBasedRlEnv) -> dict[str, Any]:
-    force_sensor = env.scene["robot/EEForceSensor_fsensor"]
-    torque_sensor = env.scene["robot/EEForceSensor_tsensor"]
-    raw_wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
-    bias = getattr(env, "_ee_ft_bias", torch.zeros_like(raw_wrench))
-    debiased_wrench = raw_wrench - bias
-    ball_contact_state = bb_mdp.ball_contact_state_mujoco(env)[0]
-    bias_pending = getattr(env, "_ee_ft_bias_pending", None)
-    robot = env.scene["robot"]
+
+def _actor_term_semantics(variant: str) -> dict[str, str]:
+    shared = {
+        "ee_vel": "racquet_frame origin linear velocity, world frame, xyz",
+        "ee_ang_vel": "racquet_frame angular velocity, world frame, xyz",
+        "ee_ft_wrench": "F/T sensor frame, force xyz then torque xyz, static racquet-side weight removed",
+        "actions": "last raw action submitted to the environment; unbounded unless wrapper_clip_actions is set",
+    }
+    if variant == "joint":
+        return {
+            "joint_pos": "joint position minus default joint position q0, joint_1 through joint_7",
+            "joint_vel": "joint velocity minus default joint velocity, joint_1 through joint_7",
+            "ee_pos": "racquet_frame origin position, world frame, xyz",
+            "ee_quat": "racquet_frame orientation in world, quaternion wxyz reconstructed from rotation matrix",
+            **shared,
+        }
     return {
-        "raw_wrench": raw_wrench[0].detach().cpu().tolist(),
-        "stored_bias": bias[0].detach().cpu().tolist(),
-        "debiased_wrench": debiased_wrench[0].detach().cpu().tolist(),
-        "ball_contact_state": ball_contact_state.detach().cpu().tolist(),
-        "bias_pending": None if bias_pending is None else bool(bias_pending[0].item()),
-        "joint_pos": robot.data.joint_pos[0].detach().cpu().tolist(),
-        "joint_vel": robot.data.joint_vel[0].detach().cpu().tolist(),
+        "ee_pos": "racquet_frame origin position relative to nominal reset pose p - p0, xyz",
+        "ee_quat": "racquet_frame orientation relative to nominal reset orientation, positive-w quaternion wxyz",
+        **shared,
     }
 
 
-def _print_ee_ft_debug_payload(payload: dict[str, Any]) -> None:
-    print("robot/joint_pos")
-    print(torch.tensor(payload["joint_pos"]))
-    print()
-    print("robot/joint_vel")
-    print(torch.tensor(payload["joint_vel"]))
-    print()
-    print(f"ee_ft/bias_pending={payload['bias_pending']}")
-    print()
-    print("ee_ft/raw_wrench")
-    print(torch.tensor(payload["raw_wrench"]))
-    print()
-    print("ee_ft/stored_bias")
-    print(torch.tensor(payload["stored_bias"]))
-    print()
-    print("ee_ft/debiased_wrench")
-    print(torch.tensor(payload["debiased_wrench"]))
-    print()
-    print("ball_contact_state")
-    print(torch.tensor(payload["ball_contact_state"]))
+def _robot_command_mapping(
+    env: ManagerBasedRlEnv,
+    policy_action: torch.Tensor,
+    clip_actions: float | None,
+) -> dict[str, Any]:
+    action_sent = (
+        torch.clamp(policy_action, -clip_actions, clip_actions)
+        if clip_actions is not None
+        else policy_action
+    )
+    action_name = env.action_manager.active_terms[0]
+    action_term = env.action_manager.get_term(action_name)
+    payload: dict[str, Any] = {
+        "wrapper_clip_actions": clip_actions,
+        "policy_output": policy_action[0].detach().cpu().tolist(),
+        "action_sent_to_env": action_sent[0].detach().cpu().tolist(),
+    }
+
+    if action_name == "joint_pos":
+        scale = action_term.scale
+        offset = action_term.offset
+        scale_tensor = scale if isinstance(scale, torch.Tensor) else torch.tensor(scale)
+        offset_tensor = offset if isinstance(offset, torch.Tensor) else torch.tensor(offset)
+        if scale_tensor.ndim > 1:
+            scale_tensor = scale_tensor[0]
+        if offset_tensor.ndim > 1:
+            offset_tensor = offset_tensor[0]
+        joint_target = offset_tensor.to(action_sent.device) + scale_tensor.to(
+            action_sent.device
+        ) * action_sent[0]
+        payload["semantics"] = "q_ref = action_offset + action_scale * clipped_policy_output"
+        payload["action_scale"] = scale_tensor.detach().cpu().tolist()
+        payload["action_offset"] = offset_tensor.detach().cpu().tolist()
+        payload["joint_position_target"] = joint_target.detach().cpu().tolist()
+    else:
+        cfg = action_term.cfg
+        payload["semantics"] = (
+            "p_ref = p_0 + delta_pos_scale * action[:3]; "
+            "R_ref = R_0 * Exp(delta_ori_scale * action[3:6])"
+        )
+        payload["delta_pos_scale"] = cfg.delta_pos_scale
+        payload["delta_ori_scale"] = cfg.delta_ori_scale
+    return payload
+
+
+def _deployment_inputs(
+    variant: str,
+    env: ManagerBasedRlEnv,
+    term_payload: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Return the current physical quantities needed to rebuild actor observations."""
+    robot = env.scene["robot"]
+    force_sensor = env.scene["robot/EEForceSensor_fsensor"]
+    torque_sensor = env.scene["robot/EEForceSensor_tsensor"]
+    raw_wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    weight_effect = bb_mdp.ee_ft_racquet_weight_effect(env)
+    actor_current = {entry["name"]: entry["current"] for entry in term_payload}
+
+    payload: dict[str, Any] = {
+        "joint_names": list(robot.joint_names),
+        "joint_pos": robot.data.joint_pos[0].detach().cpu().tolist(),
+        "default_joint_pos": robot.data.default_joint_pos[0].detach().cpu().tolist(),
+        "joint_vel": robot.data.joint_vel[0].detach().cpu().tolist(),
+        "default_joint_vel": robot.data.default_joint_vel[0].detach().cpu().tolist(),
+        "racquet_frame_lin_vel_w": actor_current["ee_vel"],
+        "racquet_frame_ang_vel_w": actor_current["ee_ang_vel"],
+        "ee_ft_raw_wrench_force_torque": raw_wrench[0].detach().cpu().tolist(),
+        "ee_ft_racquet_weight_effect": weight_effect[0].detach().cpu().tolist(),
+        "ee_ft_corrected_wrench_force_torque": (
+            raw_wrench[0] - weight_effect[0]
+        ).detach().cpu().tolist(),
+        "last_raw_policy_action": actor_current["actions"],
+    }
+    if variant == "joint":
+        payload["racquet_frame_pos_w"] = actor_current["ee_pos"]
+        payload["racquet_frame_quat_w_wxyz"] = actor_current["ee_quat"]
+        payload["joint_pos_rel"] = (
+            robot.data.joint_pos[0] - robot.data.default_joint_pos[0]
+        ).detach().cpu().tolist()
+        payload["joint_vel_rel"] = (
+            robot.data.joint_vel[0] - robot.data.default_joint_vel[0]
+        ).detach().cpu().tolist()
+    else:
+        payload["racquet_frame_pos_rel_nominal"] = actor_current["ee_pos"]
+        payload["racquet_frame_quat_rel_nominal_wxyz"] = actor_current["ee_quat"]
+    return payload
+
+
+def _print_mapping(name: str, payload: dict[str, Any]) -> None:
+    print(f"=== {name} ===")
+    for name, values in payload.items():
+        if isinstance(values, str) or name == "joint_names" or values is None:
+            print(f"{name}: {values}")
+        else:
+            print(f"{name}: {torch.tensor(values)}")
     print()
 
-def _print_term_payload(term_payload: list[dict[str, Any]], precision: int) -> None:
+
+def _print_term_current_values(term_payload: list[dict[str, Any]]) -> None:
+    print("=== current actor terms ===")
     for entry in term_payload:
         name = entry["name"]
-        flat_shape = tuple(entry["flat_shape"])
-        print(f"actor/{name} shape={flat_shape}")
-        if "history" in entry:
-            history = torch.tensor(entry["history"])
-            print(history)
-        else:
-            values = torch.tensor(entry["flat"])
-            print(values)
-        print()
-
+        print(
+            f"actor/{name} offset=[{entry['offset_start']}:{entry['offset_end']}] "
+            f"current={torch.tensor(entry['current'])}"
+        )
+    print()
 
 
 def _flatten_real_term_payload(term_payload: list[dict[str, Any]], actor_term_order: list[str]) -> list[float]:
@@ -328,8 +433,7 @@ def main() -> int:
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint file not found: {checkpoint_path}")
 
-    training_set_cfg, params = _resolve_run_params(training_set_path, args.run_name)
-    variant = training_set_cfg["variant"]
+    variant, params = _resolve_run_params(training_set_path, args.run_name)
     task_id = TASK_ID_BY_VARIANT[variant]
     device = args.device or ("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -343,10 +447,16 @@ def main() -> int:
     env_cfg = kinova_ball_balancing_env_cfg(variant=variant, play=True, params=params)
     env_cfg.scene.num_envs = 1
     env = ManagerBasedRlEnv(cfg=env_cfg, device=device, render_mode=None)
-    vec_env = RslRlVecEnvWrapper(env, clip_actions=1.0)
+    runner_cfg = kinova_ppo_runner_cfg(variant=variant, params=params)
+    vec_env = RslRlVecEnvWrapper(env, clip_actions=runner_cfg.clip_actions)
+    print(f"[obs-debug] wrapper clip_actions={runner_cfg.clip_actions}")
+    print(
+        "[obs-debug] actor observation corruption="
+        f"{env.observation_manager.cfg['actor'].enable_corruption} (play mode)"
+    )
+    print("[obs-debug] ONNX output is the raw deterministic policy output")
 
     try:
-        runner_cfg = kinova_ppo_runner_cfg(variant=variant, params=params)
         runner_cls = load_runner_cls(task_id) or MjlabOnPolicyRunner
         runner = runner_cls(vec_env, asdict(runner_cfg), device=device)
         runner.load(str(checkpoint_path), load_cfg={"actor": True}, strict=True, map_location=device)
@@ -367,7 +477,10 @@ def main() -> int:
                 action = policy(obs_td)
 
             term_payload = _actor_term_debug_payload(env)
-            ee_ft_payload = _ee_ft_debug_payload(env)
+            robot_command_mapping = _robot_command_mapping(
+                env, action, runner_cfg.clip_actions
+            )
+            deployment_inputs = _deployment_inputs(variant, env, term_payload)
 
             print(f"\n=== step {step_idx} ===")
             print(f"actor_obs shape={tuple(actor_obs.shape)}")
@@ -379,8 +492,9 @@ def main() -> int:
             print(f"policy_action shape={tuple(action.shape)}")
             print(action[0])
             print()
-            _print_ee_ft_debug_payload(ee_ft_payload)
-            _print_term_payload(term_payload, precision=args.precision)
+            _print_mapping("robot command mapping", robot_command_mapping)
+            _print_mapping("deployment inputs", deployment_inputs)
+            _print_term_current_values(term_payload)
 
             real_comparison = None
             if args.real_obs_json is not None:
@@ -403,7 +517,8 @@ def main() -> int:
                     "actor_obs": actor_obs[0].cpu().tolist(),
                     "actor_obs_normalized": normalized_actor_obs[0].cpu().tolist(),
                     "policy_action": action[0].cpu().tolist(),
-                    "ee_ft_debug": ee_ft_payload,
+                    "robot_command_mapping": robot_command_mapping,
+                    "deployment_inputs": deployment_inputs,
                     "actor_terms": term_payload,
                     "real_comparison": real_comparison,
                 }
@@ -413,13 +528,40 @@ def main() -> int:
                 obs_td, _, _, _ = vec_env.step(action)
 
         if args.json_out is not None:
+            policy_dt_s = (
+                float(params.simulation.timestep) * float(params.simulation.decimation)
+            )
             payload = {
                 "task_id": task_id,
                 "variant": variant,
                 "run_name": args.run_name,
                 "checkpoint_file": str(checkpoint_path),
                 "device": device,
+                "policy_dt_s": policy_dt_s,
+                "wrapper_clip_actions": runner_cfg.clip_actions,
+                "actor_observation_corruption": env.observation_manager.cfg[
+                    "actor"
+                ].enable_corruption,
+                "onnx_output_semantics": "raw_deterministic_policy_output",
+                "implementation_contract": {
+                    "build_actor_obs": (
+                        "Concatenate actor terms in actor_term_order. Each term history "
+                        "is flattened oldest_to_newest."
+                    ),
+                    "policy_input": (
+                        "Use actor_obs directly when running exported ONNX. "
+                        "actor_obs_normalized is included only to debug checkpoint-side "
+                        "normalization."
+                    ),
+                    "policy_output": (
+                        "Deterministic raw action. Apply wrapper_clip_actions before "
+                        "mapping it to the robot command."
+                    ),
+                },
                 "actor_term_order": actor_term_order,
+                "actor_term_semantics": _actor_term_semantics(variant),
+                "actor_layout": _actor_layout(records[0]["actor_terms"]),
+                "history_order": "oldest_to_newest",
                 "records": records,
             }
             json_out_path = Path(args.json_out).resolve()
