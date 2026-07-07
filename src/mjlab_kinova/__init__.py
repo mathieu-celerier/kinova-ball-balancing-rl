@@ -111,6 +111,42 @@ def _patch_wandb_video_upload() -> None:
     WandbSummaryWriter._kinova_video_upload_patched = True
 
 
+def _patch_mjlab_video_recorder() -> None:
+    """Allow play videos to sample frames below the environment control rate."""
+    try:
+        from mjlab.utils.wrappers.video_recorder import VideoRecorder
+    except ImportError:
+        return
+
+    if getattr(VideoRecorder, "_kinova_frame_stride_patched", False):
+        return
+
+    original_init = VideoRecorder.__init__
+    original_record_frame = VideoRecorder._record_frame
+
+    def _init_with_frame_stride(self, *args, **kwargs):
+        frame_stride = max(1, int(os.environ.get("MJLAB_KINOVA_VIDEO_FRAME_STRIDE", "1")))
+        if frame_stride > 1:
+            kwargs["disable_logger"] = False
+        original_init(self, *args, **kwargs)
+        self._kinova_frame_stride = frame_stride
+        if frame_stride > 1:
+            self._wrapped_env.metadata["render_fps"] /= frame_stride
+            print(
+                f"[INFO] Recording one frame every {frame_stride} control steps "
+                f"at {self._wrapped_env.metadata['render_fps']:.2f} FPS."
+            )
+
+    def _record_frame_with_stride(self):
+        if self.step_count % self._kinova_frame_stride == 0:
+            original_record_frame(self)
+
+    VideoRecorder.__init__ = _init_with_frame_stride
+    VideoRecorder._record_frame = _record_frame_with_stride
+    VideoRecorder._kinova_frame_stride_patched = True
+
+
 _patch_mjlab_gpu_selection()
 _patch_mjlab_video_upload_setting()
 _patch_wandb_video_upload()
+_patch_mjlab_video_recorder()

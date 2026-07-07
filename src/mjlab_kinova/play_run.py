@@ -8,6 +8,7 @@ from pathlib import Path
 
 from mjlab_kinova.play_set import _play_command
 from mjlab_kinova.play_set import _apply_play_overrides
+from mjlab_kinova.play_set import _challenge_video_args
 from mjlab_kinova.train_set import (
     _base_parameters,
     _build_run_parameters,
@@ -36,6 +37,11 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
         "--ball-kick",
         action="store_true",
         help="Enable ball-kick interval disturbances while replaying.",
+    )
+    parser.add_argument(
+        "--challenge-video",
+        action="store_true",
+        help="Record a 10-second, single-environment replay with stronger ball kicks.",
     )
     parser.add_argument(
         "--nullspace-torque",
@@ -83,8 +89,11 @@ def main() -> int:
         variant=run_variant,
         params=params,
         ball_kick=args.ball_kick,
+        challenge_video=args.challenge_video,
         nullspace_torque=args.nullspace_torque,
     )
+    if args.challenge_video:
+        extra_play_args.extend(_challenge_video_args(params))
 
     temp_config_path = _write_temp_params(params)
     cmd = _play_command(
@@ -94,6 +103,9 @@ def main() -> int:
     )
     env = os.environ.copy()
     env["MJLAB_KINOVA_TASK_PARAMS"] = temp_config_path
+    if args.challenge_video:
+        step_dt = params.simulation.timestep * params.simulation.decimation
+        env["MJLAB_KINOVA_VIDEO_FRAME_STRIDE"] = str(max(1, round(1.0 / step_dt / 30.0)))
 
     try:
         print(f"[kinova-play-run] run={run_name} variant={run_variant}")

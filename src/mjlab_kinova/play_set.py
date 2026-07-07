@@ -45,6 +45,11 @@ def _parse_args() -> tuple[argparse.Namespace, list[str]]:
         help="Enable ball-kick interval disturbances while replaying.",
     )
     parser.add_argument(
+        "--challenge-video",
+        action="store_true",
+        help="Record a 10-second, single-environment replay with stronger ball kicks.",
+    )
+    parser.add_argument(
         "--nullspace-torque",
         action=argparse.BooleanOptionalAction,
         default=None,
@@ -66,7 +71,14 @@ def _play_command(*, variant: str, extra_args: list[str], require_executable: bo
     return [play_exe, PLAY_TASK_ID_BY_VARIANT[variant], *extra_args]
 
 
-def _apply_play_overrides(*, variant: str, params, ball_kick: bool, nullspace_torque: bool | None):
+def _apply_play_overrides(
+    *,
+    variant: str,
+    params,
+    ball_kick: bool,
+    challenge_video: bool,
+    nullspace_torque: bool | None,
+):
     if nullspace_torque is not None:
         if variant != "joint":
             raise ValueError("--nullspace-torque only applies to the joint replay variant")
@@ -74,12 +86,51 @@ def _apply_play_overrides(*, variant: str, params, ball_kick: bool, nullspace_to
             params,
             joint_action=replace(params.joint_action, use_nullspace_torque=nullspace_torque),
         )
-    if ball_kick:
+    if ball_kick or challenge_video:
         params = replace(
             params,
-            training=replace(params.training, enable_ball_kick_in_play=True),
+            training=replace(
+                params.training,
+                enable_ball_kick_in_play=True,
+                use_ball_kick=True,
+            ),
+        )
+    if challenge_video:
+        kick = params.ball_kick
+        params = replace(
+            params,
+            ball_kick=replace(
+                kick,
+                linear_velocity=replace(
+                    kick.linear_velocity,
+                    x=(-0.225, 0.225),
+                    y=(-0.225, 0.225),
+                    z=(-0.045, 0.045),
+                ),
+                angular_velocity=(-0.75, 0.75),
+            ),
         )
     return params
+
+
+def _challenge_video_args(params) -> list[str]:
+    step_dt = params.simulation.timestep * params.simulation.decimation
+    control_fps = 1.0 / step_dt
+    frame_stride = max(1, round(control_fps / 30.0))
+    video_fps = control_fps / frame_stride
+    video_length = round(10.0 * video_fps)
+    return [
+        "--video",
+        "True",
+        "--video-length",
+        str(video_length),
+        "--video-width",
+        "1920",
+        "--video-height",
+        "1080",
+        "--num-envs",
+        "1",
+    ]
 
 
 def main() -> int:
@@ -119,8 +170,11 @@ def main() -> int:
         variant=run_variant,
         params=params,
         ball_kick=args.ball_kick,
+        challenge_video=args.challenge_video,
         nullspace_torque=args.nullspace_torque,
     )
+    if args.challenge_video:
+        extra_play_args.extend(_challenge_video_args(params))
     temp_config_path = _write_temp_params(params)
     cmd = _play_command(
         variant=run_variant,
@@ -129,6 +183,9 @@ def main() -> int:
     )
     env = os.environ.copy()
     env["MJLAB_KINOVA_TASK_PARAMS"] = temp_config_path
+    if args.challenge_video:
+        step_dt = params.simulation.timestep * params.simulation.decimation
+        env["MJLAB_KINOVA_VIDEO_FRAME_STRIDE"] = str(max(1, round(1.0 / step_dt / 30.0)))
 
     try:
         print(f"[kinova-play-set] run={run_name} variant={run_variant}")
