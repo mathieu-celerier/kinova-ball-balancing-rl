@@ -1,0 +1,101 @@
+[
+  {
+    "target": 1,
+    "name": "5cm / 15deg",
+    "position_overshoot_percent": 62.6191291809082,
+    "straightness_percent": 17.237611770629883,
+    "max_lateral_deviation_m": 0.1160968765616417,
+    "path_length_m": 0.2890399694442749,
+    "direct_distance_m": 0.049823589622974396,
+    "final_position_error_m": 0.10369584709405899,
+    "final_orientation_error_rad": 1.0839805603027344
+  },
+  {
+    "target": 2,
+    "name": "5cm / 30deg",
+    "position_overshoot_percent": 0.0,
+    "straightness_percent": 16.623340606689453,
+    "max_lateral_deviation_m": 0.1121622622013092,
+    "path_length_m": 0.29920241236686707,
+    "direct_distance_m": 0.04973743483424187,
+    "final_position_error_m": 0.0741167739033699,
+    "final_orientation_error_rad": 2.066312551498413
+  },
+  {
+    "target": 3,
+    "name": "5cm / 60deg",
+    "position_overshoot_percent": 0.0,
+    "straightness_percent": 19.64177894592285,
+    "max_lateral_deviation_m": 0.032751042395830154,
+    "path_length_m": 0.25675544142723083,
+    "direct_distance_m": 0.05043133720755577,
+    "final_position_error_m": 0.07940997183322906,
+    "final_orientation_error_rad": 1.3002067804336548
+  },
+  {
+    "target": 4,
+    "name": "10cm / 15deg",
+    "position_overshoot_percent": 42.66016387939453,
+    "straightness_percent": 30.003713607788086,
+    "max_lateral_deviation_m": 0.11839183419942856,
+    "path_length_m": 0.3318481147289276,
+    "direct_distance_m": 0.0995667576789856,
+    "final_position_error_m": 0.1060718223452568,
+    "final_orientation_error_rad": 0.9274003505706787
+  },
+  {
+    "target": 5,
+    "name": "10cm / 30deg",
+    "position_overshoot_percent": 2.2791953086853027,
+    "straightness_percent": 31.91071128845215,
+    "max_lateral_deviation_m": 0.11253960430622101,
+    "path_length_m": 0.3117287755012512,
+    "direct_distance_m": 0.09947486966848373,
+    "final_position_error_m": 0.08238286525011063,
+    "final_orientation_error_rad": 2.2333996295928955
+  },
+  {
+    "target": 6,
+    "name": "10cm / 60deg",
+    "position_overshoot_percent": 0.0,
+    "straightness_percent": 37.50193405151367,
+    "max_lateral_deviation_m": 0.04282309487462044,
+    "path_length_m": 0.2671094238758087,
+    "direct_distance_m": 0.10017120838165283,
+    "final_position_error_m": 0.08111090213060379,
+    "final_orientation_error_rad": 1.219079613685608
+  },
+  {
+    "target": 7,
+    "name": "20cm / 15deg",
+    "position_overshoot_percent": 18.50447654724121,
+    "straightness_percent": 49.80686950683594,
+    "max_lateral_deviation_m": 0.12206333875656128,
+    "path_length_m": 0.399657666683197,
+    "direct_distance_m": 0.1990569680929184,
+    "final_position_error_m": 0.1055511012673378,
+    "final_orientation_error_rad": 0.7025678157806396
+  },
+  {
+    "target": 8,
+    "name": "20cm / 30deg",
+    "position_overshoot_percent": 32.0980339050293,
+    "straightness_percent": 38.74314880371094,
+    "max_lateral_deviation_m": 0.12220790982246399,
+    "path_length_m": 0.5135181546211243,
+    "direct_distance_m": 0.19895309209823608,
+    "final_position_error_m": 0.07955054193735123,
+    "final_orientation_error_rad": 1.946238398551941
+  },
+  {
+    "target": 9,
+    "name": "20cm / 60deg",
+    "position_overshoot_percent": 0.0,
+    "straightness_percent": 48.47111892700195,
+    "max_lateral_deviation_m": 0.05733779817819595,
+    "path_length_m": 0.41189640760421753,
+    "direct_distance_m": 0.1996508091688156,
+    "final_position_error_m": 0.06390392780303955,
+    "final_orientation_error_rad": 0.9412767887115479
+  }
+]
