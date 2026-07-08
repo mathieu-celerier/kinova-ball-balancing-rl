@@ -3,10 +3,21 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-from scripts.debug_policy_observations import _actor_layout, _resolve_run_params
+from scripts.debug_policy_observations import (
+    _actor_layout,
+    _actor_term_semantics,
+    _resolve_run_params,
+)
 
 
 class DebugPolicyObservationsTests(unittest.TestCase):
+    def test_actor_term_semantics_describes_ft_wrench_mode(self) -> None:
+        raw_semantics = _actor_term_semantics("joint", "raw")
+        compensated_semantics = _actor_term_semantics("joint", "weight_compensated")
+
+        self.assertIn("raw sensor values", raw_semantics["ee_ft_wrench"])
+        self.assertIn("weight removed", compensated_semantics["ee_ft_wrench"])
+
     def test_resolves_concrete_variant_from_multi_training_set(self) -> None:
         training_set = Path("config/training_sets/joint_cartesian_ablation_simple_rewards.yaml")
 

@@ -178,11 +178,21 @@ def _actor_layout(term_payload: list[dict[str, Any]]) -> list[dict[str, Any]]:
     ]
 
 
-def _actor_term_semantics(variant: str) -> dict[str, str]:
+def _actor_term_semantics(
+    variant: str, ee_ft_wrench_mode: str = "raw"
+) -> dict[str, str]:
+    if ee_ft_wrench_mode == "weight_compensated":
+        ee_ft_semantics = (
+            "F/T sensor frame, force xyz then torque xyz, static racquet-side "
+            "weight removed"
+        )
+    else:
+        ee_ft_semantics = "F/T sensor frame, force xyz then torque xyz, raw sensor values"
+
     shared = {
         "ee_vel": "racquet_frame origin linear velocity, world frame, xyz",
         "ee_ang_vel": "racquet_frame angular velocity, world frame, xyz",
-        "ee_ft_wrench": "F/T sensor frame, force xyz then torque xyz, static racquet-side weight removed",
+        "ee_ft_wrench": ee_ft_semantics,
         "actions": "last raw action submitted to the environment; unbounded unless wrapper_clip_actions is set",
     }
     if variant == "joint":
@@ -559,7 +569,10 @@ def main() -> int:
                     ),
                 },
                 "actor_term_order": actor_term_order,
-                "actor_term_semantics": _actor_term_semantics(variant),
+                "actor_term_semantics": _actor_term_semantics(
+                    variant,
+                    ee_ft_wrench_mode=params.ee_ft_wrench_mode,
+                ),
                 "actor_layout": _actor_layout(records[0]["actor_terms"]),
                 "history_order": "oldest_to_newest",
                 "records": records,

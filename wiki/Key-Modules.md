@@ -24,7 +24,7 @@ Defines task-local computational pieces such as:
 
 - ball state in the plate frame
 - relative joint and end-effector pose observations
-- racquet-weight-compensated wrench access
+- configurable raw or weight-compensated F/T wrench access
 - contact-aware reward helpers
 - termination helpers
 - ball reset

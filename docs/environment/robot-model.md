@@ -46,11 +46,12 @@ The MuJoCo model defines:
 
 The task currently uses the F/T pair as actor observations.
 
-Before entering the policy observation, the raw F/T wrench is compensated by
-subtracting the static weight effect of the bodies mounted after the sensor:
-`FT_sensor_wrench`, `plate`, and `FT_sensor_imu`. This is the simulation-side
-equivalent of using a gravity-compensated wrench measurement for the racquet
-assembly, without introducing an additional learned or reset-time bias.
+The actor F/T wrench is controlled by `ee_ft_wrench_mode`. `raw` uses the MuJoCo
+sensor values directly. `weight_compensated` subtracts the static weight effect
+of the bodies mounted after the sensor: `FT_sensor_wrench`, `plate`, and
+`FT_sensor_imu`. The compensated mode mirrors a gravity-compensated wrench
+measurement for the racquet assembly without introducing an additional learned
+or reset-time bias.
 
 ## Ball Model
 

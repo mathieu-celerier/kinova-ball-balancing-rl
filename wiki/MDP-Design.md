@@ -27,7 +27,7 @@ Joint:
 - end-effector orientation in world frame
 - end-effector linear velocity in world frame
 - end-effector angular velocity in world frame
-- end-effector F/T wrench, compensated for the static racquet-side weight
+- end-effector F/T wrench, controlled by `ee_ft_wrench_mode`
 - previous network action
 
 Cartesian:
@@ -36,7 +36,7 @@ Cartesian:
 - end-effector orientation relative to the episode nominal orientation, computed as `q * conjugate(q_0)`
 - end-effector linear velocity in world frame
 - end-effector angular velocity in world frame
-- end-effector F/T wrench, compensated for the static racquet-side weight
+- end-effector F/T wrench, controlled by `ee_ft_wrench_mode`
 - previous network action
 
 For the Cartesian actor, the observation term names remain `ee_pos` and `ee_quat`,
@@ -44,10 +44,10 @@ but their values are relative to the nominal racquet pose instead of absolute
 world-frame pose values. The relative quaternion is normalized and kept with a
 positive scalar component for sign consistency.
 
-The F/T observation is built from the raw MuJoCo force and torque sensors minus
-the wrench induced by the weight of the bodies attached after the sensor:
-`FT_sensor_wrench`, `plate`, and `FT_sensor_imu`. No reset-time F/T bias is
-estimated in simulation.
+The F/T observation is controlled by `ee_ft_wrench_mode`. `raw` uses the MuJoCo
+force and torque sensors directly. `weight_compensated` subtracts the weight of
+the bodies attached after the sensor: `FT_sensor_wrench`, `plate`, and
+`FT_sensor_imu`. No reset-time F/T bias is estimated in simulation.
 
 ### Critic Observations
 

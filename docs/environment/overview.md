@@ -39,14 +39,14 @@ The repo now distinguishes between:
 ### Joint
 
 - action space: joint-space position commands
-- actor observations: joint offsets `q - q_0`, joint velocity, end-effector state, racquet-weight-compensated F/T wrench, previous action
+- actor observations: joint offsets `q - q_0`, joint velocity, end-effector state, configurable F/T wrench, previous action
 - ball centering reward: active only while ball-racquet contact is present
 - randomization: ball mass and friction, PD gains, null-space reset, robot model
 
 ### Cartesian
 
 - action space: 6D end-effector pose delta around the episode's initial racquet frame
-- actor observations: end-effector pose relative to the nominal pose `(p_0, r_0)`, end-effector velocity, racquet-weight-compensated F/T wrench, previous action
+- actor observations: end-effector pose relative to the nominal pose `(p_0, r_0)`, end-effector velocity, configurable F/T wrench, previous action
 - ball centering reward: active only while ball-racquet contact is present
 - randomization: ball mass and friction, PD gains, robot model
 

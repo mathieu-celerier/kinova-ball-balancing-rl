@@ -464,14 +464,22 @@ def ee_ft_wrench(
     env: "ManagerBasedRlEnv",
     force_sensor_name: str = "robot/EEForceSensor_fsensor",
     torque_sensor_name: str = "robot/EEForceSensor_tsensor",
+    mode: str = "raw",
 ) -> torch.Tensor:
-    """Return F/T wrench with the static racquet-side weight removed."""
+    """Return the F/T wrench observation in the configured mode."""
     force_sensor = env.scene[force_sensor_name]
     torque_sensor = env.scene[torque_sensor_name]
     assert isinstance(force_sensor, BuiltinSensor)
     assert isinstance(torque_sensor, BuiltinSensor)
     wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
-    return wrench - ee_ft_racquet_weight_effect(env)
+    if mode == "raw":
+        return wrench
+    if mode == "weight_compensated":
+        return wrench - ee_ft_racquet_weight_effect(env)
+    raise ValueError(
+        f"Unsupported ee_ft_wrench mode {mode!r}. "
+        "Expected 'raw' or 'weight_compensated'."
+    )
 
 
 def joint_torque_l2(

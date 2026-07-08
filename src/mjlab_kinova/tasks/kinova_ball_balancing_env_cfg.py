@@ -525,6 +525,7 @@ def _shared_observation_terms(
         ),
         "ee_ft_wrench": ObservationTermCfg(
             func=bb_mdp.ee_ft_wrench,
+            params={"mode": params.ee_ft_wrench_mode},
             noise=ft_noise,
         ),
         "actions": ObservationTermCfg(func=mdp.last_action),

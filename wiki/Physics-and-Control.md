@@ -87,17 +87,22 @@ That makes "supporting the ball near the center" the profitable behavior, not me
 
 The actor receives end-effector force/torque wrench measurements.
 
-The observation is not the raw sensor pair directly. In simulation it is:
+With `ee_ft_wrench_mode: raw`, the observation is the raw sensor pair directly:
+
+```text
+wrench_observation = raw_wrench
+```
+
+With `ee_ft_wrench_mode: weight_compensated`, the observation subtracts the
+racquet-side weight effect:
 
 ```text
 wrench_observation = raw_wrench - racquet_weight_effect
 ```
 
 where `racquet_weight_effect` is the static wrench caused by the bodies mounted
-after the F/T sensor: `FT_sensor_wrench`, `plate`, and `FT_sensor_imu`. This
-makes the signal stay close to zero when the racquet is only carrying its own
-weight, even if the racquet orientation changes. No separate reset-time sensor
-bias is estimated in simulation.
+after the F/T sensor: `FT_sensor_wrench`, `plate`, and `FT_sensor_imu`. No
+separate reset-time sensor bias is estimated in simulation.
 
 Those signals matter because they provide indirect information about:
 

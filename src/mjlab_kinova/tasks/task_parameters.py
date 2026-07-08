@@ -221,6 +221,7 @@ class TrainingParameters:
 class TaskParameters:
     ball: BallParameters = field(default_factory=BallParameters)
     observation_history_length: int = 5
+    ee_ft_wrench_mode: str = "raw"
     observation_noise: ObservationNoiseParameters = field(default_factory=ObservationNoiseParameters)
     joint_action: JointActionParameters = field(default_factory=JointActionParameters)
     cartesian_action: CartesianActionParameters = field(default_factory=CartesianActionParameters)
@@ -232,6 +233,15 @@ class TaskParameters:
     simulation: SimulationParameters = field(default_factory=SimulationParameters)
     ppo: PpoParameters = field(default_factory=PpoParameters)
     training: TrainingParameters = field(default_factory=TrainingParameters)
+
+    def __post_init__(self) -> None:
+        valid_modes = {"raw", "weight_compensated"}
+        if self.ee_ft_wrench_mode not in valid_modes:
+            valid = ", ".join(sorted(valid_modes))
+            raise ValueError(
+                f"Unsupported ee_ft_wrench_mode {self.ee_ft_wrench_mode!r}. "
+                f"Expected one of: {valid}."
+            )
 
 
 DEFAULT_TASK_PARAMETERS = TaskParameters()

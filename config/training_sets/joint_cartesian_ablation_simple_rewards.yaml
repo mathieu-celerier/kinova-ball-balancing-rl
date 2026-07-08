@@ -16,6 +16,7 @@ default_stop_policy:
       window: 10
       patience: 10
 global_overrides:
+  ee_ft_wrench_mode: raw
   training:
     upload_videos_to_wandb: false
   ppo:
