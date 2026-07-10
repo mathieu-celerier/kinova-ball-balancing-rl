@@ -1,7 +1,7 @@
 variant: multi
 base_config: ../task_parameters.yaml
 default_stop_policy:
-  min_iterations: 5000
+  min_iterations: 15000
   max_iterations: 20000
   combine: all
   criteria:
@@ -22,16 +22,12 @@ global_overrides:
   ppo:
     max_iterations: 30000
 runs:
-  - name: cartesian_all_randomization
-    variant: cartesian
-    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
-    overrides: {}
   - name: joint_all_randomization
     variant: joint
     presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
     overrides: {}
-  - name: cartesian_ball_properties_and_racquet_model
-    variant: cartesian
+  - name: joint_ball_properties_and_racquet_model
+    variant: joint
     presets:
       [
         zero_ball_reset_velocity,
@@ -40,8 +36,12 @@ runs:
         racquet_model_only,
       ]
     overrides: {}
-  - name: joint_ball_properties_and_racquet_model
-    variant: joint
+  - name: cartesian_all_randomization
+    variant: cartesian
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
+    overrides: {}
+  - name: cartesian_ball_properties_and_racquet_model
+    variant: cartesian
     presets:
       [
         zero_ball_reset_velocity,
