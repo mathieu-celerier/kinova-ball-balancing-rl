@@ -11,6 +11,9 @@ from typing import Any, Iterable, TypeVar, get_args, get_origin, get_type_hints
 import yaml
 
 
+REPO_ROOT = Path(__file__).resolve().parents[3]
+
+
 @dataclass(frozen=True)
 class NoiseRange:
     min: float
@@ -221,7 +224,8 @@ class TrainingParameters:
 class TaskParameters:
     ball: BallParameters = field(default_factory=BallParameters)
     observation_history_length: int = 5
-    ee_ft_wrench_mode: str = "raw"
+    ee_ft_wrench_mode: str = "mc_rtc_calibrated"
+    ee_ft_calib_file: str = "config/calib/kinova_bota_plate/calib_data.EEForceSensor"
     observation_noise: ObservationNoiseParameters = field(default_factory=ObservationNoiseParameters)
     joint_action: JointActionParameters = field(default_factory=JointActionParameters)
     cartesian_action: CartesianActionParameters = field(default_factory=CartesianActionParameters)
@@ -235,17 +239,28 @@ class TaskParameters:
     training: TrainingParameters = field(default_factory=TrainingParameters)
 
     def __post_init__(self) -> None:
-        valid_modes = {"raw", "weight_compensated"}
+        valid_modes = {"raw", "weight_compensated", "mc_rtc_calibrated"}
         if self.ee_ft_wrench_mode not in valid_modes:
             valid = ", ".join(sorted(valid_modes))
             raise ValueError(
                 f"Unsupported ee_ft_wrench_mode {self.ee_ft_wrench_mode!r}. "
                 f"Expected one of: {valid}."
             )
+    def resolved_ee_ft_calib_file(self) -> Path:
+        """Absolute path to the calibration file, resolving relative paths from the repo root.
+
+        Existence is not checked here: this runs at import time via DEFAULT_TASK_PARAMETERS,
+        and a missing data file should not break importing the module. load_ft_calib raises
+        with the resolved path when the calibration is actually needed.
+        """
+        calib_path = Path(self.ee_ft_calib_file).expanduser()
+        if calib_path.is_absolute():
+            return calib_path
+        return REPO_ROOT / calib_path
 
 
 DEFAULT_TASK_PARAMETERS = TaskParameters()
-DEFAULT_TASK_PARAMETERS_PATH = Path(__file__).resolve().parents[3] / "config" / "task_parameters.yaml"
+DEFAULT_TASK_PARAMETERS_PATH = REPO_ROOT / "config" / "task_parameters.yaml"
 TASK_PARAMETERS_ENV_VAR = "MJLAB_KINOVA_TASK_PARAMS"
 
 T = TypeVar("T")

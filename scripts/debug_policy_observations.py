@@ -186,6 +186,11 @@ def _actor_term_semantics(
             "F/T sensor frame, force xyz then torque xyz, static racquet-side "
             "weight removed"
         )
+    elif ee_ft_wrench_mode == "mc_rtc_calibrated":
+        ee_ft_semantics = (
+            "actual (calibrated) F/T sensor frame, force xyz then torque xyz, "
+            "calibrated payload weight removed; matches mc_rtc wrenchWithoutGravity"
+        )
     else:
         ee_ft_semantics = "F/T sensor frame, force xyz then torque xyz, raw sensor values"
 
@@ -259,6 +264,7 @@ def _deployment_inputs(
     variant: str,
     env: ManagerBasedRlEnv,
     term_payload: list[dict[str, Any]],
+    calib_file: str | None = None,
 ) -> dict[str, Any]:
     """Return the current physical quantities needed to rebuild actor observations."""
     robot = env.scene["robot"]
@@ -283,6 +289,15 @@ def _deployment_inputs(
         ).detach().cpu().tolist(),
         "last_raw_policy_action": actor_current["actions"],
     }
+    if calib_file is not None:
+        # Exported alongside the other two so the mc_rtc-frame signal can be compared
+        # directly against a real-robot capture.
+        payload["ee_ft_mc_rtc_calibrated_wrench_force_torque"] = (
+            bb_mdp.ee_ft_mc_rtc_calibrated_wrench(env, calib_file, wrench=raw_wrench)[0]
+            .detach()
+            .cpu()
+            .tolist()
+        )
     if variant == "joint":
         payload["racquet_frame_pos_w"] = actor_current["ee_pos"]
         payload["racquet_frame_quat_w_wxyz"] = actor_current["ee_quat"]
@@ -490,7 +505,12 @@ def main() -> int:
             robot_command_mapping = _robot_command_mapping(
                 env, action, runner_cfg.clip_actions
             )
-            deployment_inputs = _deployment_inputs(variant, env, term_payload)
+            deployment_inputs = _deployment_inputs(
+                variant,
+                env,
+                term_payload,
+                calib_file=str(params.resolved_ee_ft_calib_file()),
+            )
 
             print(f"\n=== step {step_idx} ===")
             print(f"actor_obs shape={tuple(actor_obs.shape)}")
