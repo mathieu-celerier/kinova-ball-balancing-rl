@@ -1,0 +1,52 @@
+variant: multi
+base_config: ../task_parameters.yaml
+default_stop_policy:
+  min_iterations: 15000
+  max_iterations: 20000
+  combine: all
+  criteria:
+    - metric: Train/mean_episode_length
+      threshold: 900.0
+      mode: max
+      window: 10
+      patience: 10
+    - metric: Episode_Termination/ball_fell_off
+      threshold: 1
+      mode: min
+      window: 10
+      patience: 10
+global_overrides:
+  ee_ft_wrench_mode: mc_rtc_calibrated
+  training:
+    upload_videos_to_wandb: false
+  ppo:
+    max_iterations: 30000
+runs:
+  - name: joint_all_randomization_calib
+    variant: joint
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
+    overrides: {}
+  - name: joint_ball_properties_and_racquet_model_calib
+    variant: joint
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_properties_only,
+        racquet_model_only,
+      ]
+    overrides: {}
+  - name: cartesian_all_randomization_calib
+    variant: cartesian
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
+    overrides: {}
+  - name: cartesian_ball_properties_and_racquet_model_calib
+    variant: cartesian
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        ball_properties_only,
+        racquet_model_only,
+      ]
+    overrides: {}

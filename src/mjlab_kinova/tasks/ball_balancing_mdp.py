@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import os
 import time
+from math import cos, sin
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import mujoco
@@ -460,11 +462,135 @@ def ee_ft_racquet_weight_effect(
     )
 
 
+def _rpy_to_mat(rpy: tuple[float, float, float]) -> torch.Tensor:
+    """Rotation matrix from roll-pitch-yaw, matching mc_rbdyn::rpyToMat.
+
+    mc_rtc composes RotX(r) * RotY(p) * RotZ(y) using SpaceVecAlg's spatial rotations,
+    which are the transpose of the usual vector-rotation matrices. The result maps
+    vectors from the model sensor frame into the actual one.
+    """
+    r, p, y = rpy
+    rot_x = torch.tensor(
+        [[1.0, 0.0, 0.0], [0.0, cos(r), sin(r)], [0.0, -sin(r), cos(r)]], dtype=torch.float64
+    )
+    rot_y = torch.tensor(
+        [[cos(p), 0.0, -sin(p)], [0.0, 1.0, 0.0], [sin(p), 0.0, cos(p)]], dtype=torch.float64
+    )
+    rot_z = torch.tensor(
+        [[cos(y), sin(y), 0.0], [-sin(y), cos(y), 0.0], [0.0, 0.0, 1.0]], dtype=torch.float64
+    )
+    return rot_x @ rot_y @ rot_z
+
+
+def load_ft_calib(path: str | os.PathLike[str]) -> dict[str, object]:
+    """Parse an mc_rtc ``calib_data.<sensor>`` file.
+
+    Mirrors ``ForceSensorCalibData::loadData``: 13 floats holding the payload mass, the
+    rpy of the model-to-actual sensor misalignment, the payload CoM in the parent frame,
+    and the sensor bias. Unlike mc_rtc, which only warns when the file is missing, a bad
+    or absent calibration raises here -- training silently against an identity
+    calibration would be far worse than failing.
+    """
+    calib_path = Path(path)
+    try:
+        tokens = calib_path.read_text().split()
+    except OSError as exc:
+        raise ValueError(f"Could not read F/T calibration file '{calib_path}': {exc}") from exc
+
+    if len(tokens) != 13:
+        raise ValueError(
+            f"Invalid F/T calibration file '{calib_path}': expected 13 values, got {len(tokens)}."
+        )
+    try:
+        values = [float(token) for token in tokens]
+    except ValueError as exc:
+        raise ValueError(f"Invalid F/T calibration file '{calib_path}': {exc}") from exc
+
+    # sva::ForceVecd is torque-first; this module's wrenches are force-first.
+    return {
+        "mass": values[0],
+        "rot_f_ds": _rpy_to_mat((values[1], values[2], values[3])),
+        "com_p": tuple(values[4:7]),
+        "offset_torque": tuple(values[7:10]),
+        "offset_force": tuple(values[10:13]),
+    }
+
+
+def _ft_calib_cache(env: "ManagerBasedRlEnv", calib_file: str, sensor_site_name: str) -> dict:
+    cache = getattr(env, "_ee_ft_calib_cache", None)
+    if cache is not None and cache["calib_file"] == calib_file:
+        return cache
+
+    robot: Entity = env.scene["robot"]
+    site_ids, _ = robot.find_sites(sensor_site_name, preserve_order=True)
+    if not site_ids:
+        raise ValueError(f"Site '{sensor_site_name}' was not found in 'robot'.")
+
+    calib = load_ft_calib(calib_file)
+    rot_f_ds = torch.as_tensor(calib["rot_f_ds"], device=env.device, dtype=torch.float32)
+    cache = {
+        "calib_file": calib_file,
+        "site_local_id": int(site_ids[0]),
+        "rot_f_ds": rot_f_ds,
+        # Gravity force of the calibrated payload, in world. mc_rtc bakes this in at load
+        # time as ForceSensorCalibData::worldForce.
+        "world_force": torch.as_tensor(
+            [-calib["mass"] * g for g in env.sim.mj_model.opt.gravity],
+            device=env.device,
+            dtype=torch.float32,
+        ),
+        # Lever arm in the actual sensor frame. The parent body coincides with the sensor
+        # site, so the CoM needs no world round-trip before being rotated into `ds`.
+        "com_ds": rot_f_ds @ torch.as_tensor(
+            calib["com_p"], device=env.device, dtype=torch.float32
+        ),
+    }
+    env._ee_ft_calib_cache = cache
+    return cache
+
+
+def ee_ft_mc_rtc_calibrated_wrench(
+    env: "ManagerBasedRlEnv",
+    calib_file: str,
+    *,
+    wrench: torch.Tensor,
+    sensor_site_name: str = "ee_force",
+) -> torch.Tensor:
+    """Return the wrench mc_rtc's ``wrenchWithoutGravity`` would report in sim.
+
+    Reproduces ``ForceSensorCalibData::wfToSensor`` for the Kinova setup, where the sensor
+    is declared with an identity parent transform on ``FT_sensor_wrench`` and the
+    ``ee_force`` site sits at that body's origin. Model sensor frame, parent frame and site
+    frame therefore coincide, and wfToSensor collapses to the reaction wrench of a point
+    mass at the calibrated CoM, measured at the sensor origin and expressed in the actual
+    sensor frame.
+
+    The calibration offset is deliberately not subtracted: on hardware it cancels the
+    physical sensor bias, and MuJoCo's sensor has no bias for it to cancel, so applying it
+    would inject a constant error rather than remove one.
+    """
+    cache = _ft_calib_cache(env, calib_file, sensor_site_name)
+    rot_f_ds = cache["rot_f_ds"]
+    robot: Entity = env.scene["robot"]
+    site_quat_w = robot.data.site_quat_w[:, cache["site_local_id"]]
+
+    # Gravity of the calibrated payload, world -> site -> actual sensor frame.
+    force_ds = quat_apply_inverse(site_quat_w, cache["world_force"].expand_as(wrench[:, :3]))
+    force_ds = force_ds @ rot_f_ds.T
+    torque_ds = torch.cross(cache["com_ds"].expand_as(force_ds), force_ds, dim=-1)
+
+    # The raw MuJoCo wrench is reported in the model sensor frame; mc_rtc reports in the
+    # actual one.
+    raw_ds = torch.cat((wrench[:, :3] @ rot_f_ds.T, wrench[:, 3:] @ rot_f_ds.T), dim=-1)
+    return raw_ds - torch.cat((force_ds, torque_ds), dim=-1)
+
+
 def ee_ft_wrench(
     env: "ManagerBasedRlEnv",
     force_sensor_name: str = "robot/EEForceSensor_fsensor",
     torque_sensor_name: str = "robot/EEForceSensor_tsensor",
     mode: str = "raw",
+    calib_file: str | None = None,
 ) -> torch.Tensor:
     """Return the F/T wrench observation in the configured mode."""
     force_sensor = env.scene[force_sensor_name]
@@ -476,9 +602,13 @@ def ee_ft_wrench(
         return wrench
     if mode == "weight_compensated":
         return wrench - ee_ft_racquet_weight_effect(env)
+    if mode == "mc_rtc_calibrated":
+        if calib_file is None:
+            raise ValueError("Mode 'mc_rtc_calibrated' requires a calib_file.")
+        return ee_ft_mc_rtc_calibrated_wrench(env, calib_file, wrench=wrench)
     raise ValueError(
         f"Unsupported ee_ft_wrench mode {mode!r}. "
-        "Expected 'raw' or 'weight_compensated'."
+        "Expected 'raw', 'weight_compensated' or 'mc_rtc_calibrated'."
     )
 
 

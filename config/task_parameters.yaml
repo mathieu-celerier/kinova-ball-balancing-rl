@@ -8,7 +8,11 @@ ball:
   rgba: [0.9, 0.2, 0.2, 1.0]
 
 observation_history_length: 5
-ee_ft_wrench_mode: weight_compensated
+# raw | weight_compensated | mc_rtc_calibrated
+# mc_rtc_calibrated reproduces mc_rtc's wrenchWithoutGravity so the policy trains on the
+# signal it will actually see at deploy time. See config/calib/README.md.
+ee_ft_wrench_mode: mc_rtc_calibrated
+ee_ft_calib_file: config/calib/kinova_bota_plate/calib_data.EEForceSensor
 
 observation_noise:
   joint_pos: { min: -0.01, max: 0.01 }

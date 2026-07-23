@@ -31,10 +31,14 @@ class CartesianPoseOnlyConfigTests(unittest.TestCase):
         params = load_default_task_parameters()
         cfg = kinova_ball_balancing_env_cfg(variant="joint", params=params)
 
-        self.assertEqual(params.ee_ft_wrench_mode, "weight_compensated")
+        self.assertEqual(params.ee_ft_wrench_mode, "mc_rtc_calibrated")
         self.assertEqual(
-            cfg.observations["actor"].terms["ee_ft_wrench"].params,
-            {"mode": "weight_compensated"},
+            cfg.observations["actor"].terms["ee_ft_wrench"].params["mode"],
+            "mc_rtc_calibrated",
+        )
+        self.assertEqual(
+            cfg.observations["actor"].terms["ee_ft_wrench"].params["calib_file"],
+            str(params.resolved_ee_ft_calib_file()),
         )
 
     def test_ft_wrench_observation_can_use_raw_mode(self) -> None:
@@ -45,8 +49,8 @@ class CartesianPoseOnlyConfigTests(unittest.TestCase):
         cfg = kinova_ball_balancing_env_cfg(variant="joint", params=params)
 
         self.assertEqual(
-            cfg.observations["actor"].terms["ee_ft_wrench"].params,
-            {"mode": "raw"},
+            cfg.observations["actor"].terms["ee_ft_wrench"].params["mode"],
+            "raw",
         )
 
     def test_ft_wrench_observation_rejects_unknown_mode(self) -> None:
@@ -64,8 +68,8 @@ class CartesianPoseOnlyConfigTests(unittest.TestCase):
         cfg = kinova_ball_balancing_env_cfg(variant="cartesian", params=params)
 
         self.assertEqual(
-            cfg.observations["critic"].terms["ee_ft_wrench"].params,
-            {"mode": "weight_compensated"},
+            cfg.observations["critic"].terms["ee_ft_wrench"].params["mode"],
+            "weight_compensated",
         )
 
     def test_pose_only_training_set_removes_all_ball_terms(self) -> None:
