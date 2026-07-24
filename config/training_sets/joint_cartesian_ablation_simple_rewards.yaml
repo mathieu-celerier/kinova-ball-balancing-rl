@@ -25,7 +25,9 @@ runs:
   - name: joint_all_randomization
     variant: joint
     presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
-    overrides: {}
+    overrides:
+      training:
+        use_ball_kick: true
   - name: joint_ball_properties_and_racquet_model
     variant: joint
     presets:
@@ -35,11 +37,15 @@ runs:
         ball_properties_only,
         racquet_model_only,
       ]
-    overrides: {}
+    overrides:
+      training:
+        use_ball_kick: true
   - name: cartesian_all_randomization
     variant: cartesian
     presets: [zero_ball_reset_velocity, simple_rewards, all_randomization]
-    overrides: {}
+    overrides:
+      training:
+        use_ball_kick: true
   - name: cartesian_ball_properties_and_racquet_model
     variant: cartesian
     presets:
@@ -49,4 +55,6 @@ runs:
         ball_properties_only,
         racquet_model_only,
       ]
-    overrides: {}
+    overrides:
+      training:
+        use_ball_kick: true
