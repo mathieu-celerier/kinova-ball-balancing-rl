@@ -148,6 +148,16 @@ KINOVA_IDEAL_PD_ARTICULATION = EntityArticulationInfoCfg(
     soft_joint_pos_limit_factor=0.95,
 )
 
+KINOVA_JOINT_VELOCITY_LIMITS: dict[str, float] = {
+    "joint_1": 2.0944,
+    "joint_2": 2.0944,
+    "joint_3": 2.0944,
+    "joint_4": 2.0944,
+    "joint_5": 3.049,
+    "joint_6": 3.049,
+    "joint_7": 3.049,
+}
+
 KINOVA_ACTION_SCALE: dict[str, float] = {}
 KINOVA_POSITION_STIFFNESS: dict[str, float] = {}
 KINOVA_POSITION_DAMPING: dict[str, float] = {}

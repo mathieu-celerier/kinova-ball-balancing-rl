@@ -28,10 +28,11 @@ from mjlab_kinova.robot.kinova_constants import (
     KINOVA_CFG,
     KINOVA_EFFORT_CFG,
     KINOVA_IDEAL_PD_CFG,
+    KINOVA_JOINT_VELOCITY_LIMITS,
 )
 
 from . import ball_balancing_mdp as bb_mdp
-from .policy_actions import NullspaceTorqueActionCfg
+from .policy_actions import JointVelocityLimitActionCfg, NullspaceTorqueActionCfg
 from .task_parameters import DEFAULT_TASK_PARAMETERS, TaskParameters
 
 PolicyVariant = Literal["joint", "cartesian"]
@@ -545,6 +546,14 @@ def _shared_observation_terms(
     }
 
 
+def _joint_velocity_limit_action_cfg() -> JointVelocityLimitActionCfg:
+    return JointVelocityLimitActionCfg(
+        entity_name="robot",
+        joint_names=tuple(KINOVA_JOINT_VELOCITY_LIMITS.keys()),
+        velocity_limits=KINOVA_JOINT_VELOCITY_LIMITS,
+    )
+
+
 def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTermCfg]:
     if spec.action_kind == "joint":
         action = params.joint_action
@@ -554,7 +563,8 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
                 actuator_names=(".*",),
                 scale=KINOVA_ACTION_SCALE,
                 use_default_offset=action.use_default_offset,
-            )
+            ),
+            "joint_vel_limit": _joint_velocity_limit_action_cfg(),
         }
 
     action = params.cartesian_action
@@ -576,7 +586,8 @@ def _actions_cfg(spec: PolicySpec, params: TaskParameters) -> dict[str, ActionTe
             orientation_error_in_body_frame=action.orientation_error_in_body_frame,
             posture_target=KINOVA_CFG.init_state.joint_pos,
             nullspace_resample_interval_s=action.nullspace_resample_interval_s,
-        )
+        ),
+        "joint_vel_limit": _joint_velocity_limit_action_cfg(),
     }
 
 

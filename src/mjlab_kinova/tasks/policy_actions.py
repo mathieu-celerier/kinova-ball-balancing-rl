@@ -15,6 +15,7 @@ from mjlab.envs.mdp.actions.differential_ik import (
 )
 from mjlab.envs.mdp.actions.actions import BaseAction, BaseActionCfg
 from mjlab.envs.manager_based_rl_env import ManagerBasedRlEnv
+from mjlab.managers.action_manager import ActionTerm, ActionTermCfg
 from mjlab.utils.lab_api.math import (
     apply_delta_pose,
     axis_angle_from_quat,
@@ -366,6 +367,57 @@ class JointNullspaceTorqueAction(BaseAction):
 
         interval_steps = self._sample_next_nullspace_resample_step(env_ids)
         self._next_nullspace_resample_step[env_ids] = current_step[env_ids] + interval_steps
+
+
+@dataclass(kw_only=True)
+class JointVelocityLimitActionCfg(ActionTermCfg):
+    """Clamps joint velocities to fixed limits every physics substep."""
+
+    joint_names: tuple[str, ...]
+    velocity_limits: dict[str, float]
+
+    def build(self, env: ManagerBasedRlEnv) -> "JointVelocityLimitAction":
+        return JointVelocityLimitAction(self, env)
+
+
+class JointVelocityLimitAction(ActionTerm):
+    """Hard velocity limit enforced by clamping ``qvel`` directly.
+
+    MuJoCo has no native joint-velocity constraint (unlike position, which
+    uses the ``limited``/``range`` hard-stop constraint). ``apply_actions``
+    runs every physics substep, before ``sim.step()``, so any overshoot is
+    corrected before the next substep's dynamics are computed.
+    """
+
+    cfg: JointVelocityLimitActionCfg
+
+    def __init__(self, cfg: JointVelocityLimitActionCfg, env: ManagerBasedRlEnv):
+        super().__init__(cfg=cfg, env=env)
+        joint_ids, joint_names = self._entity.find_joints(cfg.joint_names)
+        self._joint_ids = torch.tensor(joint_ids, device=self.device, dtype=torch.long)
+        limits = [cfg.velocity_limits[name] for name in joint_names]
+        self._vel_limit = torch.tensor(limits, device=self.device).unsqueeze(0)
+        self._raw_action = torch.zeros(self.num_envs, 0, device=self.device)
+
+    @property
+    def action_dim(self) -> int:
+        return 0
+
+    @property
+    def raw_action(self) -> torch.Tensor:
+        return self._raw_action
+
+    def process_actions(self, actions: torch.Tensor) -> None:
+        pass
+
+    def apply_actions(self) -> None:
+        qvel = self._entity.data.joint_vel[:, self._joint_ids]
+        clamped = torch.clamp(qvel, min=-self._vel_limit, max=self._vel_limit)
+        qpos = self._entity.data.joint_pos[:, self._joint_ids]
+        self._entity.write_joint_state_to_sim(qpos, clamped, joint_ids=self._joint_ids)
+
+    def reset(self, env_ids: torch.Tensor | slice | None = None) -> None:
+        pass
 
 
 @dataclass(kw_only=True)
