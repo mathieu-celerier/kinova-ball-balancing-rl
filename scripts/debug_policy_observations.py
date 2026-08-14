@@ -189,10 +189,16 @@ def _actor_term_semantics(
     elif ee_ft_wrench_mode == "mc_rtc_calibrated":
         ee_ft_semantics = (
             "actual (calibrated) F/T sensor frame, force xyz then torque xyz, "
-            "calibrated payload weight removed; matches mc_rtc wrenchWithoutGravity"
+            "calibrated payload weight removed; matches mc_rtc wrenchWithoutGravity. "
+            "The simulated force is scaled by the sensor's measured gain first, so this "
+            "is directly comparable to a real capture; take it from the real robot "
+            "without applying any gain of your own"
         )
     else:
-        ee_ft_semantics = "F/T sensor frame, force xyz then torque xyz, raw sensor values"
+        ee_ft_semantics = (
+            "F/T sensor frame, force xyz then torque xyz, sensor values with the measured "
+            "force gain applied but no gravity compensation"
+        )
 
     shared = {
         "ee_vel": "racquet_frame origin linear velocity, world frame, xyz",
@@ -265,12 +271,19 @@ def _deployment_inputs(
     env: ManagerBasedRlEnv,
     term_payload: list[dict[str, Any]],
     calib_file: str | None = None,
+    force_gain: float = 1.0,
 ) -> dict[str, Any]:
     """Return the current physical quantities needed to rebuild actor observations."""
     robot = env.scene["robot"]
     force_sensor = env.scene["robot/EEForceSensor_fsensor"]
     torque_sensor = env.scene["robot/EEForceSensor_tsensor"]
-    raw_wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    sim_wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    # MuJoCo's sensor is exact; the Bota reads low on force. Everything below is meant to be
+    # held against a real capture, so it has to be what the sensor would have *measured*,
+    # not what the simulator knows to be true. Skip this and the calibrated channel -- the
+    # one the comparison actually turns on -- comes out 3.7 % of the payload weight off, and
+    # does not even match this run's own observations.
+    raw_wrench = bb_mdp.apply_ft_sensor_response(env, sim_wrench, force_gain)
     weight_effect = bb_mdp.ee_ft_racquet_weight_effect(env)
     actor_current = {entry["name"]: entry["current"] for entry in term_payload}
 
@@ -510,6 +523,7 @@ def main() -> int:
                 env,
                 term_payload,
                 calib_file=str(params.resolved_ee_ft_calib_file()),
+                force_gain=params.ft_sensor.force_gain,
             )
 
             print(f"\n=== step {step_idx} ===")

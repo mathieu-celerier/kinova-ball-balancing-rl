@@ -101,6 +101,7 @@ class TrainingBehavior:
     randomize_ball_properties: bool
     randomize_pd_gains: bool
     randomize_racquet_model: bool
+    randomize_ft_sensor_response: bool
     randomize_robot_model: bool
     randomize_null_space_init: bool
     use_ball_kick: bool
@@ -148,6 +149,7 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
         randomize_ball_properties=True,
         randomize_pd_gains=True,
         randomize_racquet_model=False,
+        randomize_ft_sensor_response=True,
         randomize_robot_model=True,
         randomize_null_space_init=True,
         use_ball_kick=True,
@@ -160,6 +162,7 @@ DEFAULT_TRAINING_BEHAVIOR: dict[PolicyVariant, TrainingBehavior] = {
         randomize_ball_properties=True,
         randomize_pd_gains=True,
         randomize_racquet_model=False,
+        randomize_ft_sensor_response=True,
         randomize_robot_model=True,
         randomize_null_space_init=False,
         use_ball_kick=True,
@@ -203,6 +206,11 @@ def _resolve_training_behavior(
             defaults.randomize_racquet_model
             if training.randomize_racquet_model is None
             else training.randomize_racquet_model
+        ),
+        randomize_ft_sensor_response=(
+            defaults.randomize_ft_sensor_response
+            if training.randomize_ft_sensor_response is None
+            else training.randomize_ft_sensor_response
         ),
         randomize_robot_model=(
             defaults.randomize_robot_model
@@ -492,7 +500,19 @@ def _shared_observation_terms(
     ee_ori_noise = _noise_cfg(use_noise, noise.ee_ori)
     ee_vel_noise = _noise_cfg(use_noise, noise.ee_vel)
     ee_ang_vel_noise = _noise_cfg(use_noise, noise.ee_ang_vel)
-    ft_noise = _noise_cfg(use_noise, noise.ee_ft_wrench)
+    # The wrench noise is state-dependent -- it grows with joint speed -- which the Unoise
+    # interface cannot express, so it is handed to the observation term as parameters and
+    # sampled there. `use_noise` gates it by zeroing the coefficients -- which also means
+    # flipping `enable_corruption` after the config is built no longer silences it; the
+    # actor's `use_noise` already folds in `play`, and the critic passes False.
+    ft = params.ft_sensor
+    ft_params = {
+        "force_gain": ft.force_gain,
+        "noise_force_floor": ft.noise_force_floor if use_noise else 0.0,
+        "noise_force_slope": ft.noise_force_slope if use_noise else 0.0,
+        "noise_torque_floor": ft.noise_torque_floor if use_noise else 0.0,
+        "noise_torque_slope": ft.noise_torque_slope if use_noise else 0.0,
+    }
     return {
         "joint_pos": ObservationTermCfg(
             func=bb_mdp.joint_pos_rel,
@@ -529,8 +549,8 @@ def _shared_observation_terms(
             params={
                 "mode": params.ee_ft_wrench_mode,
                 "calib_file": str(params.resolved_ee_ft_calib_file()),
+                **ft_params,
             },
-            noise=ft_noise,
         ),
         "actions": ObservationTermCfg(func=mdp.last_action),
         "ee_pos_rel": ObservationTermCfg(
@@ -717,6 +737,23 @@ def _events_cfg(
                 "body_mass_range": randomization.racquet_body_mass_scale,
                 "body_inertia_range": randomization.racquet_body_inertia_scale,
                 "asset_cfg": racquet_body_cfg(),
+            },
+        )
+
+    # Not in play: a randomized anisotropy and up to 2 N per N.m of leakage would swamp any
+    # sim-vs-real comparison, which is most of what play runs are for here. Play gets the
+    # nominal sensor, matching how the wrench noise is switched off there too.
+    if behavior.randomize_ft_sensor_response and not play:
+        ft = params.ft_sensor
+        events["randomize_ft_sensor_response"] = EventTermCfg(
+            func=bb_mdp.randomize_ft_sensor_response,
+            mode="reset",
+            params={
+                "force_gain": ft.force_gain,
+                "anisotropy_range": ft.anisotropy_range,
+                "crosstalk_norm_range": ft.crosstalk_norm_range,
+                "bias_force_range": ft.bias_force_range,
+                "bias_torque_range": ft.bias_torque_range,
             },
         )
 

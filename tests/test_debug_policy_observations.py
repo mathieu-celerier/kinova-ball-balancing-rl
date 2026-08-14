@@ -15,8 +15,15 @@ class DebugPolicyObservationsTests(unittest.TestCase):
         raw_semantics = _actor_term_semantics("joint", "raw")
         compensated_semantics = _actor_term_semantics("joint", "weight_compensated")
 
-        self.assertIn("raw sensor values", raw_semantics["ee_ft_wrench"])
+        calibrated_semantics = _actor_term_semantics("joint", "mc_rtc_calibrated")
+
+        self.assertIn("no gravity compensation", raw_semantics["ee_ft_wrench"])
         self.assertIn("weight removed", compensated_semantics["ee_ft_wrench"])
+        self.assertIn("wrenchWithoutGravity", calibrated_semantics["ee_ft_wrench"])
+        # Whoever reads this contract has to know the sensor gain is already in the
+        # exported numbers, or they will apply it a second time on the real-robot side.
+        for semantics in (raw_semantics, calibrated_semantics):
+            self.assertIn("gain", semantics["ee_ft_wrench"])
 
     def test_resolves_concrete_variant_from_multi_training_set(self) -> None:
         training_set = Path("config/training_sets/joint_cartesian_ablation_simple_rewards.yaml")

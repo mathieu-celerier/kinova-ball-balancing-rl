@@ -1,0 +1,12 @@
+# Isolates the F/T sensor's own response: the measured anisotropy about the 3.7 % force
+# gain, plus the torque-to-force leakage that is probably the mount rather than the sensor.
+# See ~/devel/ft-calib-investigation/README.md section 0f.
+training:
+  use_observation_noise: false
+  randomize_ball_reset: false
+  randomize_ball_properties: false
+  randomize_pd_gains: false
+  randomize_ft_sensor_response: true
+  randomize_robot_model: false
+  randomize_null_space_init: false
+  use_ball_kick: false

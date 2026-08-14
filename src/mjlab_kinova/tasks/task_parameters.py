@@ -50,7 +50,43 @@ class ObservationNoiseParameters:
     ee_ori: NoiseRange = field(default_factory=lambda: NoiseRange(-0.01, 0.01))
     ee_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.05, 0.05))
     ee_ang_vel: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
-    ee_ft_wrench: NoiseRange = field(default_factory=lambda: NoiseRange(-0.1, 0.1))
+    # The F/T wrench is deliberately absent here: its noise is not state-independent, so it
+    # lives in FtSensorParameters and is applied inside the observation term instead.
+
+
+@dataclass(frozen=True)
+class FtSensorParameters:
+    """Measured behaviour of the Bota F/T sensor, for reproducing it in simulation.
+
+    Everything here comes from ~/devel/ft-calib-investigation/README.md: the gain from
+    section 0e (three robot runs against weighed tools, cross-checked by a rope-hung weight
+    in 0f), the noise coefficients from section 0g (fitted on the racquet's own
+    check-calibration run), and the randomization ranges from the anisotropy and torque
+    cross-talk characterised in 0f.
+    """
+
+    # The Bota reads 3.67 % low on force. The calibration file carries `k * true_mass` to
+    # match, so simulation has to scale its exact wrench by the same k, or the compensation
+    # lands 3.7 % off in sim while being exact on hardware.
+    force_gain: float = 0.9633
+
+    # sd = floor + slope * ||joint velocity||, force in N and couple in N.m. Section 0g.
+    # Measured at the policy's own 100 Hz observation rate; decimating from 1 kHz moves
+    # these by less than a part in a thousand, so no anti-alias modelling is needed.
+    noise_force_floor: float = 0.0785
+    noise_force_slope: float = 0.3142
+    noise_torque_floor: float = 0.00465
+    noise_torque_slope: float = 0.04713
+
+    # Per-episode randomization of the response that is measured but not modelled.
+    # Principal gains ran 0.997 / 0.992 / 0.931 about their mean; the leakage norm was
+    # ~1.6 N per N.m and is suspected to be the mount rather than the sensor.
+    anisotropy_range: tuple[float, float] = (0.93, 1.01)
+    crosstalk_norm_range: tuple[float, float] = (0.0, 2.0)
+    # Drift accumulated since the tare, not a standing offset: the sensor is re-zeroed at
+    # the home pose with the racquet on at every startup.
+    bias_force_range: tuple[float, float] = (-0.05, 0.05)
+    bias_torque_range: tuple[float, float] = (-0.005, 0.005)
 
 
 @dataclass(frozen=True)
@@ -215,6 +251,7 @@ class TrainingParameters:
     randomize_ball_properties: bool | None = None
     randomize_pd_gains: bool | None = None
     randomize_racquet_model: bool | None = None
+    randomize_ft_sensor_response: bool | None = None
     randomize_robot_model: bool | None = None
     randomize_null_space_init: bool | None = None
     use_ball_kick: bool | None = None
@@ -227,6 +264,7 @@ class TaskParameters:
     ee_ft_wrench_mode: str = "mc_rtc_calibrated"
     ee_ft_calib_file: str = "config/calib/kinova_bota_plate/calib_data.EEForceSensor"
     observation_noise: ObservationNoiseParameters = field(default_factory=ObservationNoiseParameters)
+    ft_sensor: FtSensorParameters = field(default_factory=FtSensorParameters)
     joint_action: JointActionParameters = field(default_factory=JointActionParameters)
     cartesian_action: CartesianActionParameters = field(default_factory=CartesianActionParameters)
     ball_reset: BallResetParameters = field(default_factory=BallResetParameters)

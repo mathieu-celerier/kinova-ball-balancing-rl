@@ -22,7 +22,27 @@ observation_noise:
   ee_ori: { min: -0.01, max: 0.01 }
   ee_vel: { min: -0.05, max: 0.05 }
   ee_ang_vel: { min: -0.1, max: 0.1 }
-  ee_ft_wrench: { min: -0.1, max: 0.1 }
+  # ee_ft_wrench is not here: its noise depends on how fast the arm is moving, so it is
+  # configured under ft_sensor and applied inside the observation term.
+
+# Measured behaviour of the real Bota sensor. See ~/devel/ft-calib-investigation/README.md,
+# sections 0e (gain), 0f (anisotropy and torque cross-talk) and 0g (noise).
+ft_sensor:
+  # The sensor reads 3.67 % low on force, and the calibration file carries k * true_mass to
+  # match, so simulation must scale its exact wrench by the same factor.
+  force_gain: 0.9633
+  # sd = floor + slope * ||joint velocity||. The floor is the parked sensor; the slope is
+  # vibration and drivetrain noise, which is what dominates once the arm swings.
+  noise_force_floor: 0.0785 # N
+  noise_force_slope: 0.3142 # N per rad/s
+  noise_torque_floor: 0.00465 # N.m
+  noise_torque_slope: 0.04713 # N.m per rad/s
+  # Randomized per episode: the measured anisotropy, and a torque-to-force leakage that is
+  # probably the mount deforming rather than the sensor, so it is spanned rather than fixed.
+  anisotropy_range: [0.93, 1.01]
+  crosstalk_norm_range: [0.0, 2.0] # N per N.m
+  bias_force_range: [-0.05, 0.05] # N, drift since the tare
+  bias_torque_range: [-0.005, 0.005] # N.m
 
 joint_action:
   use_default_offset: true
@@ -49,10 +69,10 @@ cartesian_action:
 
 ball_reset:
   xy_range: [-0.02, 0.02]
-  z_offset: 0.08
+  z_offset: 0.15
   x_offset: 0.0
   y_offset: 0.0
-  release_delay_s: [0.0, 0.25]
+  release_delay_s: [0.25, 0.5]
   linear_velocity:
     x: [-0.25, 0.25]
     y: [-0.25, 0.25]

@@ -588,19 +588,124 @@ def ee_ft_mc_rtc_calibrated_wrench(
     return raw_ds - torch.cat((force_ds, torque_ds), dim=-1)
 
 
+FT_SENSOR_STATE_ATTR = "_ee_ft_sensor_state"
+
+
+def _ft_sensor_state(env: "ManagerBasedRlEnv", force_gain: float) -> dict[str, torch.Tensor]:
+    """Per-environment sensor response, defaulting to a clean isotropic gain.
+
+    ``gain`` is the 3x3 mapping true force -> measured force and ``leakage`` the 3x3 mapping
+    measured torque -> the force it bleeds into. Both are identity-like until
+    :func:`randomize_ft_sensor_response` replaces them, so a run without that event still
+    gets the deterministic ``force_gain`` and nothing else.
+    """
+    state = getattr(env, FT_SENSOR_STATE_ATTR, None)
+    if state is not None and state["gain"].shape[0] == env.num_envs:
+        return state
+
+    eye = torch.eye(3, device=env.device, dtype=torch.float32)
+    state = {
+        "gain": (force_gain * eye).expand(env.num_envs, 3, 3).clone(),
+        "leakage": torch.zeros(env.num_envs, 3, 3, device=env.device, dtype=torch.float32),
+        "bias": torch.zeros(env.num_envs, 6, device=env.device, dtype=torch.float32),
+    }
+    setattr(env, FT_SENSOR_STATE_ATTR, state)
+    return state
+
+
+def apply_ft_sensor_response(
+    env: "ManagerBasedRlEnv",
+    wrench: torch.Tensor,
+    force_gain: float,
+) -> torch.Tensor:
+    """Turn MuJoCo's exact wrench into what the Bota would have measured.
+
+    The real sensor reads about 3.7 % low on force, with a mild anisotropy, and leaks
+    measured torque into the force channels at roughly 1.6 N per N.m -- see sections 0e
+    and 0f of ~/devel/ft-calib-investigation/README.md. The isotropic part matters even
+    without randomization: the calibration file deliberately holds ``k * true_mass``
+    because it subtracts a *measured* gravity wrench, so leaving MuJoCo's force unscaled
+    would over-subtract by 3.7 % in sim while hardware comes out exact.
+
+    The torque channel keeps unit gain: the couple residuals against the rigid model
+    (0.019-0.024 N.m) show no measurable error there.
+    """
+    state = _ft_sensor_state(env, force_gain)
+    force, torque = wrench[:, :3], wrench[:, 3:]
+    force = (
+        torch.bmm(state["gain"], force.unsqueeze(-1)).squeeze(-1)
+        + torch.bmm(state["leakage"], torque.unsqueeze(-1)).squeeze(-1)
+    )
+    return torch.cat((force, torque), dim=-1) + state["bias"]
+
+
+def _ft_sensor_noise(
+    env: "ManagerBasedRlEnv",
+    noise_force_floor: float,
+    noise_force_slope: float,
+    noise_torque_floor: float,
+    noise_torque_slope: float,
+    robot_name: str = "robot",
+) -> torch.Tensor:
+    """Sample the measurement noise, which is two mechanisms rather than one.
+
+    A floor that is there with the arm parked, and a broadband term from vibration and
+    drivetrain noise that grows with how fast the arm is moving. Fitted on the racquet's
+    own check-calibration run in section 0g of ~/devel/ft-calib-investigation/README.md,
+    where the >5 Hz residual is linear in ||alpha|| over the whole speed range covered.
+
+    Force and torque get their own floor and slope: they differ by more than a factor of
+    ten and are not in the same units, which the single uniform range this replaced could
+    not express -- it was over-noising the couple channels by about 30x.
+    """
+    robot: Entity = env.scene[robot_name]
+    speed = torch.linalg.norm(robot.data.joint_vel, dim=-1, keepdim=True)
+    sd = torch.cat(
+        (
+            (noise_force_floor + noise_force_slope * speed).expand(-1, 3),
+            (noise_torque_floor + noise_torque_slope * speed).expand(-1, 3),
+        ),
+        dim=-1,
+    )
+    return torch.randn_like(sd) * sd
+
+
 def ee_ft_wrench(
     env: "ManagerBasedRlEnv",
     force_sensor_name: str = "robot/EEForceSensor_fsensor",
     torque_sensor_name: str = "robot/EEForceSensor_tsensor",
     mode: str = "raw",
     calib_file: str | None = None,
+    force_gain: float = 1.0,
+    noise_force_floor: float = 0.0,
+    noise_force_slope: float = 0.0,
+    noise_torque_floor: float = 0.0,
+    noise_torque_slope: float = 0.0,
 ) -> torch.Tensor:
-    """Return the F/T wrench observation in the configured mode."""
+    """Return the F/T wrench observation in the configured mode.
+
+    The sensor response and its noise are applied to the raw wrench, before any gravity
+    compensation, because that is where they happen on hardware. The compensation is
+    linear, so for the noise this is bookkeeping, but for the gain it is not: applying it
+    after the calibration would correct the wrong side of the subtraction.
+
+    All of it defaults to off (unit gain, zero noise), so a direct call stays a pure
+    readout; the environment config supplies the measured values.
+    """
     force_sensor = env.scene[force_sensor_name]
     torque_sensor = env.scene[torque_sensor_name]
     assert isinstance(force_sensor, BuiltinSensor)
     assert isinstance(torque_sensor, BuiltinSensor)
     wrench = torch.cat((force_sensor.data, torque_sensor.data), dim=-1)
+    wrench = apply_ft_sensor_response(env, wrench, force_gain)
+    if noise_force_floor or noise_force_slope or noise_torque_floor or noise_torque_slope:
+        wrench = wrench + _ft_sensor_noise(
+            env,
+            noise_force_floor,
+            noise_force_slope,
+            noise_torque_floor,
+            noise_torque_slope,
+        )
     if mode == "raw":
         return wrench
     if mode == "weight_compensated":
@@ -2090,6 +2195,63 @@ def randomize_racquet_model(
         asset_cfg=asset_cfg,
         inertia_range=body_inertia_range,
         operation="scale",
+    )
+
+
+def randomize_ft_sensor_response(
+    env: "ManagerBasedRlEnv",
+    env_ids: torch.Tensor | None,
+    force_gain: float,
+    anisotropy_range: tuple[float, float],
+    crosstalk_norm_range: tuple[float, float],
+    bias_force_range: tuple[float, float],
+    bias_torque_range: tuple[float, float],
+) -> None:
+    """Randomize the part of the sensor's response that is real but not worth baking in.
+
+    The F/T investigation measured both effects directly: principal gains of about
+    0.997 / 0.992 / 0.931 around a mean of 0.9734, and a torque-to-force leakage of roughly
+    1.6 N per N.m. The leakage is far outside any plausible load-cell cross-talk spec,
+    which points at the *mount* deforming rather than the sensor element -- so it may
+    vanish once the mechanical interface is inspected, and hard-coding it would train the
+    policy against a fault we intend to fix. Randomizing over it instead makes the policy
+    tolerant either way.
+
+    The gain is built as ``force_gain * R diag(g) R^T`` with ``R`` a uniformly random
+    rotation, so the anisotropy has no preferred direction -- the one measured weak axis
+    was fitted on a single tool and should not be treated as a property of the hardware.
+
+    The bias covers thermal drift accumulating after the tare. It is deliberately small:
+    the sensor is re-zeroed at the home pose with the racquet on at every startup, so there
+    is no standing offset for it to model, only drift since.
+    """
+    state = _ft_sensor_state(env, force_gain)
+    if env_ids is None:
+        env_ids = torch.arange(env.num_envs, device=env.device)
+    n = int(env_ids.numel())
+    if n == 0:
+        return
+
+    # Uniformly random rotation, via a normalized Gaussian quaternion.
+    quat = torch.randn(n, 4, device=env.device, dtype=torch.float32)
+    quat = quat / torch.linalg.norm(quat, dim=-1, keepdim=True)
+    rot = matrix_from_quat(quat)
+
+    gains = sample_uniform(anisotropy_range[0], anisotropy_range[1], (n, 3), env.device)
+    state["gain"][env_ids] = force_gain * (rot @ torch.diag_embed(gains) @ rot.transpose(-1, -2))
+
+    # A random direction in 3x3 space, scaled to a drawn Frobenius norm.
+    leak = torch.randn(n, 3, 3, device=env.device, dtype=torch.float32)
+    leak = leak / torch.linalg.matrix_norm(leak, keepdim=True).clamp_min(1e-6)
+    norms = sample_uniform(crosstalk_norm_range[0], crosstalk_norm_range[1], (n, 1, 1), env.device)
+    state["leakage"][env_ids] = leak * norms
+
+    state["bias"][env_ids] = torch.cat(
+        (
+            sample_uniform(bias_force_range[0], bias_force_range[1], (n, 3), env.device),
+            sample_uniform(bias_torque_range[0], bias_torque_range[1], (n, 3), env.device),
+        ),
+        dim=-1,
     )
 
 
