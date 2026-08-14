@@ -6,11 +6,34 @@ signal the mc_rtc controller produces at deploy time.
 
 ## `kinova_bota_plate/calib_data.EEForceSensor`
 
-Copied 2026-07-15 from the mc_rtc workspace:
+Copied 2026-08-13 from the mc_rtc workspace:
 
 ```
 mc_rtc/src/catkin_data_ws/install/share/kortex_description/calib/kinova_bota_plate/calib_data.EEForceSensor
 ```
+
+Fitted the same day with the current racquet mounted, tared at the Kinova home pose
+`[0, 15, 180, -130, 0, 55, 90]` deg. The previous copy (2026-07-15) was for the *older*
+plate revision — 0.137 kg with an 8.9°/14.7° claimed misalignment — and left roughly
+0.9 N of constant sim-vs-real bias on this observation.
+
+Two things about the numbers are worth knowing, both from
+`~/devel/ft-calib-investigation/README.md`:
+
+- **The mass is deliberately not the true mass.** The Bota's force channel reads 3.67 %
+  low, and the calibration subtracts the *measured* gravity wrench, so the file carries
+  `k * true_mass` with `k = 0.9633`. The simulator therefore scales its exact MuJoCo force
+  by the same `k` before applying this file (`ee_ft_wrench`), or the compensation would be
+  3.7 % over-subtracted in sim and exact on hardware.
+- **The tare is what fixes the offset.** The sensor is zeroed at the home pose with the
+  racquet on, so `f_measured` is zero there by construction and the offset is exactly minus
+  the model wrench at that pose. As long as the real robot keeps taring at home with the
+  racquet on, no extra bias term is needed to make sim and hardware agree.
+
+Back-solving this file (divide by `k`, subtract `FT_sensor_wrench`'s 0.081117 kg) implies a
+plate link of 0.2312 kg against the modelled 0.226 kg. That difference is left in place: it
+is within the fit's known bias from the sensor's anisotropy, and it leaves ~0.05 N of
+orientation-dependent residual in sim — below the sensor's own 0.067 N noise floor.
 
 mc_rtc resolves this path itself as `<RobotModule::calib_dir>/calib_data.<sensor name>`
 (`mc_rbdyn/Robot.cpp`), with `calib_dir` defaulting to `<kortex_description>/calib/<variant>`.
