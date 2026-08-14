@@ -46,8 +46,16 @@ positive scalar component for sign consistency.
 
 The F/T observation is controlled by `ee_ft_wrench_mode`. `raw` uses the MuJoCo
 force and torque sensors directly. `weight_compensated` subtracts the weight of
-the bodies attached after the sensor: `FT_sensor_wrench`, `plate`, and
-`FT_sensor_imu`. No reset-time F/T bias is estimated in simulation.
+the bodies attached after the sensor: `FT_sensor_wrench` and `plate`. `mc_rtc_calibrated`, the default, reproduces mc_rtc's
+`wrenchWithoutGravity` against the vendored calibration so the policy trains on
+the signal the deployed controller produces — see
+[physics](physics.md#role-of-forcetorque-sensing). In every mode the real
+sensor's gain and noise are applied to the MuJoCo wrench first; see "Modelling
+the real sensor" in [robot-model](robot-model.md).
+
+No reset-time F/T bias is estimated in simulation, and none is needed: the real
+sensor is tared at the home pose with the racquet on at every startup, so the
+calibration's offset is the tare.
 
 ### Critic Observations
 
@@ -66,7 +74,8 @@ This helps optimize the policy during simulation without forcing the deployed ac
 
 ## Observation Noise
 
-Training noise is injected into actor observations:
+Training noise is injected into actor observations. Everything except the wrench
+is uniform and independent of state:
 
 - joint position: `[-0.01, 0.01]`
 - joint velocity: `[-0.1, 0.1]`
@@ -74,7 +83,23 @@ Training noise is injected into actor observations:
 - end-effector orientation quaternion: `[-0.01, 0.01]`
 - end-effector velocity: `[-0.05, 0.05]`
 - end-effector angular velocity: `[-0.1, 0.1]`
-- F/T wrench: `[-0.1, 0.1]`
+
+The F/T wrench is the exception. Its noise was measured on the real sensor and is
+two mechanisms rather than one, so it is Gaussian with a standard deviation that
+grows with how fast the arm is moving:
+
+```text
+sd_force  = 0.0785  + 0.3142  * ||joint velocity||   [N]
+sd_torque = 0.00465 + 0.04713 * ||joint velocity||   [N.m]
+```
+
+The floors are the parked sensor; the slopes are vibration and drivetrain noise,
+which dominate once the arm swings. Because this depends on state, it is sampled
+inside the observation term rather than through the `Unoise` mechanism, and it is
+configured under `ft_sensor:` in `config/task_parameters.yaml` rather than under
+`observation_noise:`. One consequence: flipping `enable_corruption` after the
+config is built no longer silences it — training and play are already
+distinguished when the term's parameters are built.
 
 Previous actions are included as deterministic history terms and are not
 randomized by observation noise.
@@ -130,6 +155,14 @@ with:
 - `delta_ori_scale = 0.5`
 
 Those pose targets are then tracked by the Cartesian torque controller with the null-space posture term described below.
+
+The task-space torque law uses separate linear and angular damping terms:
+
+```text
+F_task = position_weight * e_p - damping_pos * (J_p qdot)
+T_task = orientation_weight * e_R - damping_ori * (J_R qdot)
+tau_task = J^T [F_task, T_task]
+```
 
 The Cartesian null-space posture target uses the same pre-sampled
 racquet-compatible posture list as the optional joint torque mode. It is

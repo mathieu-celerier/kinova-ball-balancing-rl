@@ -101,8 +101,29 @@ wrench_observation = raw_wrench - racquet_weight_effect
 ```
 
 where `racquet_weight_effect` is the static wrench caused by the bodies mounted
-after the F/T sensor: `FT_sensor_wrench`, `plate`, and `FT_sensor_imu`. No
-separate reset-time sensor bias is estimated in simulation.
+after the F/T sensor: `FT_sensor_wrench` and `plate`.
+
+With `ee_ft_wrench_mode: mc_rtc_calibrated` — the default — the observation
+reproduces what mc_rtc's `wrenchWithoutGravity` reports on the real robot:
+
+```text
+wrench_observation = R_f_ds · measured_wrench - gravity_wrench(calib mass, calib CoM)
+```
+
+against the vendored `config/calib/kinova_bota_plate/calib_data.EEForceSensor`.
+The calibration's 6-value offset is deliberately *not* subtracted: on hardware it
+cancels a physical sensor bias, and MuJoCo's sensor has none for it to cancel.
+
+`measured_wrench` here is not MuJoCo's raw output. The real sensor's gain and its
+noise are applied first — see "Modelling the real sensor" in
+[robot-model](robot-model.md) for what is reproduced and why. In particular the
+force channel is scaled by 0.9633 before the compensation, because the calibration
+file holds `k * true_mass` by construction.
+
+No reset-time sensor bias is estimated in simulation, and none is needed: the real
+sensor is re-zeroed at the home pose with the racquet mounted at every startup, so
+the calibration's offset *is* the tare. Only drift accumulated since then is
+randomized.
 
 Those signals matter because they provide indirect information about:
 
