@@ -393,7 +393,10 @@ def ee_ft_racquet_weight_effect(
     env: "ManagerBasedRlEnv",
     robot_name: str = "robot",
     sensor_site_name: str = "ee_force",
-    load_body_names: tuple[str, ...] = ("FT_sensor_wrench", "plate", "FT_sensor_imu"),
+    # Everything above the load cell, and nothing else. FT_sensor_imu used to be listed here
+    # because the MJCF wrongly parented it to FT_sensor_wrench; it sits on the fixed side, below
+    # the cell, so the real sensor never weighs it. Keep this in step with the model.
+    load_body_names: tuple[str, ...] = ("FT_sensor_wrench", "plate"),
 ) -> torch.Tensor:
     """Return the static wrench induced by the racquet-side weight at the F/T sensor."""
     robot: Entity = env.scene[robot_name]
