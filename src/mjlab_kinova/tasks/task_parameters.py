@@ -36,7 +36,7 @@ class BallParameters:
     mass: float = 0.0657
     friction: tuple[float, float, float] = (1.0, 0.2, 0.0005)
     condim: int = 6
-    solref: tuple[float, float] = (0.02, 2.5)
+    solref: tuple[float, float] = (0.002, 1.0)
     solimp: tuple[float, float, float, float, float] = (0.95, 0.995, 0.001, 0.5, 2.0)
     rgba: tuple[float, float, float, float] = (0.9, 0.2, 0.2, 1.0)
 
