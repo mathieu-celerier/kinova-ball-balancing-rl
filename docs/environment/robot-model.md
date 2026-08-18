@@ -12,6 +12,7 @@ Actuator groups:
 - joints `5-7`: stiffness `15`, damping `8.5`, effort limit `45`, armature `0.015`
 
 The home pose is also defined there and used as the nominal initial state and posture target.
+It matches mc_kinova's stance, which is also where the F/T sensor is tared.
 
 ## End-Effector Stack
 
@@ -33,9 +34,12 @@ computed from the mesh at uniform density, which is accurate here: 226 g over th
 183.2 cm³ mesh volume is 1233 kg/m³, essentially solid PLA.
 
 The blade is a 5 mm slab **offset to one side** of the wrist axis, spanning
-`y = -0.035 … -0.030` in the plate frame. The striking surface is the plane
-`y = -0.035`, and `racquet_frame` sits on the blade mid-plane at
-`(0, -0.0325, 0.125)` with its `+Z` along that face normal.
+`y = -0.035 … -0.030` in the plate frame. Both of its faces are flat, and
+`plate_collision` is the hull of the blade alone, so either one could carry the ball.
+`racquet_frame` sits on the blade mid-plane at `(0, -0.0325, 0.125)` with its `+Z` out of
+the `y = -0.030` face — the one that points up at the home pose. That orientation is what
+the task assumes: the ball reset places the ball at `+z_offset` along this axis, so a
+frame pointing the other way spawns it underneath the racquet.
 
 The collision support surface is modeled by `plate_collision`, a MuJoCo mesh geom
 attached to the plate body. It is the convex hull of the blade only (the blade proper

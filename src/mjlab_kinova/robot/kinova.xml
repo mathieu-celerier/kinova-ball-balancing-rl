@@ -102,7 +102,8 @@
                             <site name="ee_force" size="0.01" pos="0.0 0.0 0.0" />
                             <!-- Body frame matches the URDF "plate" link frame. The meshes are
                                  authored in metres in that frame rotated +90 deg about Z, hence
-                                 the yaw on each geom. Striking face is the plane y = -0.035. -->
+                                 the yaw on each geom. The blade is the slab y = -0.035..-0.030,
+                                 flat on both faces. -->
                             <body name="plate" pos="0 0 0" gravcomp="0">
                               <inertial pos="1.81E-05 -2.51566E-02 9.55300E-02" mass="0.226"
                                 fullinertia="1.124629E-03 1.382903E-03 3.658632E-04 -1.032380E-07 4.014063E-07 1.500394E-04" />
@@ -115,10 +116,14 @@
                                 solref="0.02 2.5"
                                 solimp="0.95 0.995 0.001 0.5 2" />
                               <!-- Balancing reference frame: origin on the blade mid-plane
-                                   (blade spans y -0.035..-0.030), +Z along the striking face
-                                   normal. -->
+                                   (blade spans y -0.035..-0.030), +Z out of the y = -0.030
+                                   face. Both faces are flat and plate_collision is the blade
+                                   hull alone, so either could carry the ball; +Z is the one
+                                   that points up at the home pose, which is what the task
+                                   assumes -- the ball reset places the ball at +z_offset along
+                                   this axis. The -0.035 face would have it spawn underneath. -->
                               <body name="racquet_frame" pos="0 -0.0325 0.125"
-                                euler="1.5707963267948966 0 0">
+                                euler="-1.5707963267948966 0 0">
                               </body>
                             </body>
                           </body>
