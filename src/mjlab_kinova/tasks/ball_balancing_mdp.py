@@ -15,6 +15,7 @@ import torch
 import warp as wp
 
 from mjlab.entity import Entity
+from mjlab.managers.event_manager import RecomputeLevel, requires_model_fields
 from mjlab.managers.scene_entity_config import SceneEntityCfg
 from mjlab.sensor import BuiltinSensor
 from mjlab.utils.lab_api.math import axis_angle_from_quat, compute_pose_error
@@ -2067,6 +2068,7 @@ def kick_ball_velocity(
     ball.write_root_link_velocity_to_sim(out_vel, env_ids=env_ids)
 
 
+@requires_model_fields("body_mass", recompute=RecomputeLevel.set_const)
 def randomize_body_mass(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -2085,6 +2087,7 @@ def randomize_body_mass(
     )
 
 
+@requires_model_fields("geom_friction")
 def randomize_ball_friction(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -2170,6 +2173,7 @@ def randomize_ball_friction(
         raise ValueError(f"Unsupported operation '{operation}'.")
 
 
+@requires_model_fields("body_inertia", recompute=RecomputeLevel.set_const_0)
 def randomize_body_inertia(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -2188,6 +2192,9 @@ def randomize_body_inertia(
     )
 
 
+@requires_model_fields(
+    "body_mass", "body_inertia", "dof_armature", recompute=RecomputeLevel.set_const
+)
 def randomize_robot_model(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -2220,6 +2227,9 @@ def randomize_robot_model(
     )
 
 
+@requires_model_fields(
+    "body_mass", "body_inertia", recompute=RecomputeLevel.set_const
+)
 def randomize_racquet_model(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -2301,6 +2311,7 @@ def randomize_ft_sensor_response(
     )
 
 
+@requires_model_fields("actuator_gainprm", "actuator_biasprm")
 def randomize_pd_gains(
     env: "ManagerBasedRlEnv",
     env_ids: torch.Tensor | None,
@@ -2466,13 +2477,3 @@ def _randomize_dof_armature(
         raise ValueError(f"Unsupported operation '{operation}'.")
 
 
-# Declaring the fields is what makes mjlab expand them to real per-world memory. Without it the
-# array still reports shape (num_envs, ...) but its world axis is a stride-0 broadcast: every
-# environment shares one value and the last reset to write wins for all of them. geom_friction was
-# missing from this list, so ball/racquet friction was never randomized per environment.
-randomize_body_mass.model_fields = ("body_mass",)
-randomize_body_inertia.model_fields = ("body_inertia",)
-randomize_racquet_model.model_fields = ("body_mass", "body_inertia")
-randomize_robot_model.model_fields = ("body_mass", "body_inertia", "dof_armature")
-randomize_pd_gains.model_fields = ("actuator_gainprm", "actuator_biasprm")
-randomize_ball_friction.model_fields = ("geom_friction",)
