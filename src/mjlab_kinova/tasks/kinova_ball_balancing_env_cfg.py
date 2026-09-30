@@ -702,6 +702,7 @@ def _events_cfg(
                 "ball_name": "ball",
                 "geom_name": "ball_geom",
                 "friction_scale": randomization.ball_friction_scale,
+                "component_scales": randomization.ball_friction_component_scale,
                 "operation": "scale",
             },
         )

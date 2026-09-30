@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import time
+from collections.abc import Sequence
 from math import cos, sin
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -2091,17 +2092,49 @@ def randomize_ball_friction(
     geom_name: str,
     friction_scale: tuple[float, float],
     operation: str = "scale",
+    racquet_asset_name: str | None = "robot",
+    racquet_geom_name: str = "plate_collision",
+    component_scales: Sequence[Sequence[float]] | None = None,
 ) -> None:
-    """Randomize the friction triplet for the selected ball geom."""
+    """Randomize the friction triplet of the ball-racquet contact.
+
+    Two things this has to get right, both of which it previously got wrong.
+
+    Indexing: `Entity.find_geoms` returns positions within that entity's own `geom_names`, while
+    `sim.model.geom_friction` is indexed by the model-global geom id. For the ball those differ
+    (local 0, global 13), so the original `geom_friction[:, 0]` wrote the *terrain* and the ball
+    was never touched. The mapping is `entity.indexing.geom_ids`.
+
+    The pair: MuJoCo resolves a contact's friction as the element-wise maximum of the two geom
+    frictions, and neither geom sets `priority` or `solmix`. Writing only one of them cannot pull
+    the contact below the other's fixed 1.0/0.2/0.0005, so both are written, from the SAME
+    per-environment draw - drawing them independently would bias every contact toward the higher
+    of two samples.
+
+    Pass `racquet_asset_name=None` to write the ball geom alone.
+
+    `component_scales` gives (sliding, torsional, rolling) ranges separately, overriding
+    `friction_scale`. The three are not physically interchangeable - sliding is dimensionless
+    while torsional and rolling are lengths - so one shared range cannot be right for all of
+    them, and scaling rolling by the factor that suits sliding lands far outside anything
+    physical.
+    """
     if env_ids is None:
         env_ids = torch.arange(env.num_envs, device=env.device, dtype=torch.long)
     else:
         env_ids = env_ids.to(env.device, dtype=torch.long)
 
-    ball: Entity = env.scene[ball_name]
-    geom_ids, _ = ball.find_geoms(geom_name, preserve_order=True)
+    def _global_geom_ids(asset_name: str, name: str) -> list[int]:
+        entity: Entity = env.scene[asset_name]
+        local_ids, _ = entity.find_geoms(name, preserve_order=True)
+        table = entity.indexing.geom_ids
+        return [int(table[i]) for i in local_ids]
+
+    geom_ids = _global_geom_ids(ball_name, geom_name)
     if not geom_ids:
         return
+    if racquet_asset_name is not None:
+        geom_ids += _global_geom_ids(racquet_asset_name, racquet_geom_name)
 
     geom_ids = torch.as_tensor(geom_ids, device=env.device, dtype=torch.long)
     geom_friction = env.sim.model.geom_friction
@@ -2109,12 +2142,25 @@ def randomize_ball_friction(
 
     env_grid, geom_grid = torch.meshgrid(env_ids, geom_ids, indexing="ij")
     base_values = default_geom_friction[geom_ids].unsqueeze(0).expand(len(env_ids), -1, -1)
-    samples = sample_uniform(
-        friction_scale[0],
-        friction_scale[1],
-        base_values.shape,
-        device=env.device,
-    )
+    # One draw per (env, friction component), shared across both geoms of the pair.
+    n_comp = base_values.shape[-1]
+    if component_scales is None:
+        samples = sample_uniform(
+            friction_scale[0], friction_scale[1], (len(env_ids), 1, n_comp), device=env.device
+        )
+    else:
+        if len(component_scales) != n_comp:
+            raise ValueError(
+                f"component_scales needs {n_comp} (lo, hi) pairs, got {len(component_scales)}"
+            )
+        samples = torch.cat(
+            [
+                sample_uniform(float(lo), float(hi), (len(env_ids), 1, 1), device=env.device)
+                for lo, hi in component_scales
+            ],
+            dim=-1,
+        )
+    samples = samples.expand_as(base_values)
 
     if operation == "scale":
         geom_friction[env_grid, geom_grid] = base_values * samples
@@ -2420,8 +2466,13 @@ def _randomize_dof_armature(
         raise ValueError(f"Unsupported operation '{operation}'.")
 
 
+# Declaring the fields is what makes mjlab expand them to real per-world memory. Without it the
+# array still reports shape (num_envs, ...) but its world axis is a stride-0 broadcast: every
+# environment shares one value and the last reset to write wins for all of them. geom_friction was
+# missing from this list, so ball/racquet friction was never randomized per environment.
 randomize_body_mass.model_fields = ("body_mass",)
 randomize_body_inertia.model_fields = ("body_inertia",)
 randomize_racquet_model.model_fields = ("body_mass", "body_inertia")
 randomize_robot_model.model_fields = ("body_mass", "body_inertia", "dof_armature")
 randomize_pd_gains.model_fields = ("actuator_gainprm", "actuator_biasprm")
+randomize_ball_friction.model_fields = ("geom_friction",)

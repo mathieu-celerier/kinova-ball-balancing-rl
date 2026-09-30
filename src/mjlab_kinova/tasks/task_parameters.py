@@ -155,6 +155,10 @@ class RandomizationParameters:
     null_space_curriculum_steps: int = 125_000
     ball_mass_scale: tuple[float, float] = (0.7, 1.3)
     ball_friction_scale: tuple[float, float] = (0.8, 1.2)
+    # (sliding, torsional, rolling) ranges, each a (lo, hi) scale on that component's nominal.
+    # Overrides ball_friction_scale when set. Needed because the three components are not
+    # interchangeable: sliding is dimensionless, torsional and rolling are lengths.
+    ball_friction_component_scale: tuple[tuple[float, float], ...] | None = None
     pd_gain_scale: tuple[float, float] = (0.95, 1.05)
     racquet_body_mass_scale: tuple[float, float] = (0.9, 1.1)
     racquet_body_inertia_scale: tuple[float, float] = (0.9, 1.1)
