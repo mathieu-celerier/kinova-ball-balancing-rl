@@ -1,0 +1,13 @@
+# Play-only probe: the joint_all_randomization_calib recipe plus realistic rolling friction and
+# ball kicks left on during play (they default off, and without them the ball sits at a static
+# equilibrium and shows none of the disturbance-rejection behaviour worth looking at).
+variant: multi
+base_config: ../task_parameters.yaml
+runs:
+  - name: joint_all_randomization_calib_realistic
+    variant: joint
+    presets: [zero_ball_reset_velocity, simple_rewards, all_randomization, realistic_contact]
+    overrides:
+      training:
+        use_ball_kick: true
+        enable_ball_kick_in_play: true

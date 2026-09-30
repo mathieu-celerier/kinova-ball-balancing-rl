@@ -1,0 +1,30 @@
+# Retrain preset: corrected contact nominal + friction randomization that actually works +
+# actuation-error randomization matched to what was measured on the deployed controller.
+#
+# 1. Rolling friction nominal 0.0005 -> 0.0015 on the ball.
+#    MuJoCo's rolling friction is a LENGTH, not a dimensionless coefficient. Measured by rolling
+#    this ball (r = 33.5 mm) to rest: 0.0005 -> C_rr 0.0084, 0.001 -> 0.020, 0.005 -> 0.034.
+#    A tennis ball on a hard surface is C_rr ~ 0.02-0.04, so 0.0015 is mid-band and the old
+#    default was ~2x low. Only the ball is set: MuJoCo takes the element-wise MAXIMUM of the two
+#    geoms' friction, so raising the ball lifts the contact without touching the racquet.
+#    !! Replace 0.0015 with C_rr_measured * 0.0335 once the real racquet is measured.
+#
+# 2. Per-component friction randomization. One shared scale cannot serve all three components.
+#    - sliding  [0.5, 1.0]: felt on printed plastic is nearer 0.5-0.8 than the nominal 1.0, and
+#      the event scales BOTH geoms, so this reaches below 1.0 without editing kinova.xml.
+#    - torsional [0.5, 1.0]: tracks sliding.
+#    - rolling  [0.67, 3.33]: spans mu_roll 0.001-0.005 about the 0.0015 nominal, i.e. the whole
+#      physical C_rr band.
+#    Until the indexing fix this event wrote the TERRAIN and never the ball, so no policy trained
+#    so far has seen any friction variation at all.
+#
+# 3. pd_gain_scale [0.95, 1.05] -> [0.85, 1.15]. The deployed QP delivers ~10% less joint torque
+#    than the policy asks for (measured, cause still unidentified). +-5% never covered that;
+#    +-15% covers it with margin. This is a training-side hedge only - deployment gains must stay
+#    equal to the trained ones.
+ball:
+  friction: [1.0, 0.2, 0.0015]
+
+randomization:
+  ball_friction_component_scale: [[0.5, 1.0], [0.5, 1.0], [0.67, 3.33]]
+  pd_gain_scale: [0.85, 1.15]

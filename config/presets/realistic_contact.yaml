@@ -1,0 +1,15 @@
+# Contact parameters closer to a felt tennis ball on a printed racquet.
+#
+# Only the rolling term is raised, and only on the ball. MuJoCo resolves contact friction as the
+# element-wise maximum of the two geoms, so raising the ball's rolling friction is enough to lift
+# the contact; lowering the sliding term would additionally require editing plate_collision in
+# src/mjlab_kinova/robot/kinova.xml, and measurement says sliding barely matters here (contact mu
+# from 1.0 down to 0.25 left spin, ball travel and drop rate unchanged).
+#
+# MuJoCo's rolling friction has units of LENGTH, not a dimensionless coefficient. Measured on a
+# rolling-deceleration test with this ball (r = 33.5 mm): mu_roll 0.0005 -> C_rr 0.0084,
+# 0.001 -> 0.020, 0.005 -> 0.034, 0.02 -> 0.141. A tennis ball on a hard surface is C_rr ~ 0.02-0.04,
+# so the physical band is mu_roll ~ 0.001-0.005 and the sim default of 0.0005 is only about 2x low.
+# 0.0015 sits mid-band. This is a textbook C_rr, not a measurement of your racquet.
+ball:
+  friction: [1.0, 0.2, 0.0015]

@@ -1,0 +1,43 @@
+# Retrain of the joint_all_randomization_calib recipe with the corrected contact model and
+# actuation-error range. Same rewards and same everything else, so the result is comparable with
+# run 2026-08-19_00-29-58, whose iteration-3800 checkpoint is the policy to beat.
+#
+# Compare candidates with the perturbed-drop protocol, not the stop metric: both previous runs
+# peaked mid-run and the criterion selected a degraded end checkpoint in each case. Sweep the
+# saved checkpoints before deploying.
+variant: multi
+base_config: ../task_parameters.yaml
+default_stop_policy:
+  min_iterations: 5000
+  max_iterations: 15000
+  combine: all
+  criteria:
+    - metric: Train/mean_episode_length
+      threshold: 900.0
+      mode: max
+      window: 10
+      patience: 10
+    - metric: Episode_Termination/ball_fell_off
+      threshold: 1
+      mode: min
+      window: 10
+      patience: 10
+global_overrides:
+  ee_ft_wrench_mode: mc_rtc_calibrated
+  training:
+    upload_videos_to_wandb: false
+  ppo:
+    max_iterations: 30000
+runs:
+  - name: joint_corrected_contact_calib
+    variant: joint
+    presets:
+      [
+        zero_ball_reset_velocity,
+        simple_rewards,
+        all_randomization,
+        corrected_contact_and_gains,
+      ]
+    overrides:
+      training:
+        use_ball_kick: true
